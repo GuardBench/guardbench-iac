@@ -8,13 +8,13 @@ terraform {
     }
   }
 
-  # Remote State Backend (S3 + DynamoDB Lock)
+  # Remote State Backend (S3 native locking, Terraform >= 1.10)
   backend "s3" {
-    bucket         = "guardbench-terraform-state"
-    key            = "infra/terraform.tfstate"
-    region         = "ap-northeast-2"
-    dynamodb_table = "guardbench-terraform-lock"
-    encrypt        = true
+    bucket       = "guardbench-terraform-state"
+    key          = "infra/terraform.tfstate"
+    region       = "ap-northeast-2"
+    use_lockfile = true
+    encrypt      = true
   }
 }
 
