@@ -1,0 +1,12 @@
+# 실제 사용 시 terraform.tfvars로 복사 후 값을 입력하세요.
+# cp terraform.tfvars.example terraform.tfvars
+
+project     = "guardbench"
+environment = "dev"
+aws_region  = "ap-northeast-2"
+
+# VPC / 네트워크 (기존 VPC와 CIDR 충돌하지 않도록 설정)
+vpc_cidr             = "10.1.0.0/16"
+# availability_zones = ["ap-northeast-2a", "ap-northeast-2c"]  # 기본값 사용
+public_subnet_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
+private_subnet_cidrs = ["10.1.10.0/24", "10.1.20.0/24"]
