@@ -31,11 +31,11 @@ resource "aws_lb_target_group" "api" {
 
   health_check {
     enabled             = true
-    path                = "/health"
+    path                = "/api/v1/test-suites"
     port                = "traffic-port"
     protocol            = "HTTP"
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
     timeout             = 5
     interval            = 30
     matcher             = "200"

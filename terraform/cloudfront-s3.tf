@@ -40,8 +40,8 @@ resource "aws_s3_bucket_policy" "frontend" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowCloudFrontOAC"
-        Effect    = "Allow"
+        Sid    = "AllowCloudFrontOAC"
+        Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
@@ -94,7 +94,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     custom_origin_config {
       http_port              = 80
       https_port             = 443
-      origin_protocol_policy = "https-only"
+      origin_protocol_policy = "http-only"
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
@@ -128,17 +128,8 @@ resource "aws_cloudfront_distribution" "frontend" {
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
 
-    forwarded_values {
-      query_string = true
-      headers      = ["Authorization", "Origin", "Accept"]
-      cookies {
-        forward = "all"
-      }
-    }
-
-    min_ttl     = 0
-    default_ttl = 0 # API는 캐싱하지 않음
-    max_ttl     = 0
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host_header.id
   }
 
   # SPA 클라이언트 라우팅: 404 → index.html 반환
@@ -170,4 +161,12 @@ resource "aws_cloudfront_distribution" "frontend" {
   tags = {
     Name = "${var.project}-${var.environment}-frontend-cf"
   }
+}
+
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host_header" {
+  name = "Managed-AllViewerExceptHostHeader"
 }
