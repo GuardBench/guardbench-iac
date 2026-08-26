@@ -75,6 +75,21 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.app.repository_url
 }
 
+output "rds_endpoint" {
+  description = "Private PostgreSQL endpoint for the combined app service"
+  value       = aws_db_instance.app.address
+}
+
+output "sqs_queue_urls" {
+  description = "Source queue URLs injected into the app task definition"
+  value       = { for name, queue in aws_sqs_queue.source : name => queue.url }
+}
+
+output "ops_sns_topic_arn" {
+  description = "Operations alarm topic; email subscriptions require confirmation"
+  value       = aws_sns_topic.ops.arn
+}
+
 # ============================================
 # Security Group Outputs
 # ============================================
@@ -89,7 +104,7 @@ output "api_security_group_id" {
 }
 
 output "worker_security_group_id" {
-  description = "Worker (orchestrator/executor) security group ID"
+  description = "Preserved worker security group ID; not attached during the first dev deployment"
   value       = aws_security_group.worker.id
 }
 

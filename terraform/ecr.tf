@@ -1,12 +1,12 @@
 # ============================================
 # ECR Repository (컨테이너 이미지 저장소)
-# 3개 서비스가 하나의 이미지를 공유, 실행 명령으로 역할 구분
+# 단일 App Service가 HTTP API와 비동기 worker를 함께 실행한다.
 # ============================================
 
 resource "aws_ecr_repository" "app" {
   name                 = "${var.project}-${var.environment}"
-  image_tag_mutability = "MUTABLE"
-  force_delete         = var.environment != "prod"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
 
   image_scanning_configuration {
     scan_on_push = true

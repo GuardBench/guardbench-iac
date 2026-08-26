@@ -11,23 +11,13 @@ resource "aws_security_group" "alb" {
   }
 }
 
-resource "aws_security_group_rule" "alb_ingress_https" {
-  type              = "ingress"
-  from_port         = 443
-  to_port           = 443
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "HTTPS from internet"
-  security_group_id = aws_security_group.alb.id
-}
-
 resource "aws_security_group_rule" "alb_ingress_http" {
   type              = "ingress"
   from_port         = 80
   to_port           = 80
   protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "HTTP from internet (redirects to HTTPS)"
+  prefix_list_ids   = [data.aws_ec2_managed_prefix_list.cloudfront_origin_facing.id]
+  description       = "HTTP from CloudFront origin-facing servers"
   security_group_id = aws_security_group.alb.id
 }
 
@@ -64,14 +54,14 @@ resource "aws_security_group_rule" "api_ingress_from_alb" {
   security_group_id        = aws_security_group.api.id
 }
 
-resource "aws_security_group_rule" "api_egress_https" {
-  type              = "egress"
-  from_port         = 443
-  to_port           = 443
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "AWS services (SQS, CloudWatch, SSM)"
-  security_group_id = aws_security_group.api.id
+resource "aws_security_group_rule" "api_egress_to_vpc_endpoints" {
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.vpc_endpoints.id
+  description              = "AWS services through VPC endpoints"
+  security_group_id        = aws_security_group.api.id
 }
 
 resource "aws_security_group_rule" "api_egress_to_rds" {
@@ -142,16 +132,6 @@ resource "aws_security_group_rule" "rds_ingress_from_api" {
   security_group_id        = aws_security_group.rds.id
 }
 
-resource "aws_security_group_rule" "rds_ingress_from_worker" {
-  type                     = "ingress"
-  from_port                = var.db_port
-  to_port                  = var.db_port
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.worker.id
-  description              = "From Worker services"
-  security_group_id        = aws_security_group.rds.id
-}
-
 # ============================================
 # VPC Endpoints Security Group
 # ============================================
@@ -160,15 +140,20 @@ resource "aws_security_group" "vpc_endpoints" {
   description = "GuardBench VPC Endpoints - allow HTTPS from private subnets"
   vpc_id      = aws_vpc.main.id
 
+  # 기존 state가 inline ingress를 소유한다. API만 남겨 Worker 접근을 제거한다.
   ingress {
-    description     = "HTTPS from API and Worker services"
+    description     = "HTTPS from the combined app service"
     from_port       = 443
     to_port         = 443
     protocol        = "tcp"
-    security_groups = [aws_security_group.api.id, aws_security_group.worker.id]
+    security_groups = [aws_security_group.api.id]
   }
 
   tags = {
     Name = "${var.project}-${var.environment}-vpce-sg"
   }
+}
+
+data "aws_ec2_managed_prefix_list" "cloudfront_origin_facing" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
 }
