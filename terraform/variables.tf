@@ -22,7 +22,7 @@ variable "aws_region" {
 variable "vpc_cidr" {
   description = "VPC CIDR block"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.1.0.0/16"
 }
 
 variable "availability_zones" {
@@ -34,13 +34,13 @@ variable "availability_zones" {
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets (ALB)"
   type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+  default     = ["10.1.1.0/24", "10.1.2.0/24"]
 }
 
 variable "private_subnet_cidrs" {
   description = "CIDR blocks for private subnets (ECS, RDS, VPC Endpoints)"
   type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.20.0/24"]
+  default     = ["10.1.10.0/24", "10.1.20.0/24"]
 }
 
 # ============================================
@@ -64,28 +64,27 @@ variable "api_memory" {
   default     = 1024
 }
 
-variable "api_desired_count" {
-  description = "Number of API tasks"
-  type        = number
-  default     = 2
-}
-
-variable "worker_cpu" {
-  description = "CPU units for worker tasks (orchestrator/executor)"
-  type        = number
-  default     = 512
-}
-
-variable "worker_memory" {
-  description = "Memory (MiB) for worker tasks"
-  type        = number
-  default     = 1024
-}
-
-variable "worker_desired_count" {
-  description = "Number of worker tasks (orchestrator/executor each)"
+variable "app_desired_count" {
+  description = "Number of combined application tasks"
   type        = number
   default     = 1
+}
+
+variable "app_image_tag" {
+  description = "Immutable ECR tag for the verified backend commit"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{7,64}$", var.app_image_tag))
+    error_message = "app_image_tag must be a verified Git commit SHA."
+  }
+}
+
+variable "alarm_email" {
+  description = "Optional email address that confirms the dev operations SNS subscription"
+  type        = string
+  default     = null
+  nullable    = true
 }
 
 variable "db_port" {
