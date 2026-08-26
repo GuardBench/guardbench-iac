@@ -140,19 +140,18 @@ resource "aws_security_group" "vpc_endpoints" {
   description = "GuardBench VPC Endpoints - allow HTTPS from private subnets"
   vpc_id      = aws_vpc.main.id
 
+  # 기존 state가 inline ingress를 소유한다. API만 남겨 Worker 접근을 제거한다.
+  ingress {
+    description     = "HTTPS from the combined app service"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.api.id]
+  }
+
   tags = {
     Name = "${var.project}-${var.environment}-vpce-sg"
   }
-}
-
-resource "aws_security_group_rule" "vpc_endpoints_ingress_from_api" {
-  type                     = "ingress"
-  from_port                = 443
-  to_port                  = 443
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.api.id
-  description              = "HTTPS from the combined app service"
-  security_group_id        = aws_security_group.vpc_endpoints.id
 }
 
 data "aws_ec2_managed_prefix_list" "cloudfront_origin_facing" {
