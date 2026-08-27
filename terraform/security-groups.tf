@@ -64,6 +64,19 @@ resource "aws_security_group_rule" "api_egress_to_vpc_endpoints" {
   security_group_id        = aws_security_group.api.id
 }
 
+# ECR image layer downloads use the S3 Gateway endpoint rather than an
+# interface endpoint ENI. Restrict the task egress to the endpoint's managed
+# S3 prefix list; no internet or NAT route is required.
+resource "aws_security_group_rule" "api_egress_to_s3_gateway" {
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  prefix_list_ids   = [aws_vpc_endpoint.s3.prefix_list_id]
+  description       = "ECR image layers through S3 Gateway endpoint"
+  security_group_id = aws_security_group.api.id
+}
+
 resource "aws_security_group_rule" "api_egress_to_rds" {
   type                     = "egress"
   from_port                = var.db_port
