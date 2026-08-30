@@ -36,7 +36,11 @@ data "aws_iam_policy_document" "frontend_github_actions_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:GuardBench/guardbench-frontend:ref:refs/heads/main"]
+      # GuardBench customizes GitHub OIDC subjects with immutable organization
+      # and repository IDs. Keep the main ref suffix to restrict deployments.
+      values = [
+        "repo:GuardBench@316853045/guardbench-frontend@1346059955:ref:refs/heads/main",
+      ]
     }
   }
 }
