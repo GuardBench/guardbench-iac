@@ -16,6 +16,21 @@ variable "aws_region" {
   default     = "ap-northeast-2"
 }
 
+variable "github_oidc_provider_arn" {
+  description = "Existing account-wide GitHub Actions OIDC provider ARN; null creates one"
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = var.github_oidc_provider_arn == null || can(regex(
+      "^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:oidc-provider/token\\.actions\\.githubusercontent\\.com$",
+      var.github_oidc_provider_arn,
+    ))
+    error_message = "github_oidc_provider_arn must be the token.actions.githubusercontent.com provider ARN."
+  }
+}
+
 # ============================================
 # VPC / 네트워크 설정
 # ============================================

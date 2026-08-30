@@ -44,6 +44,11 @@ output "s3_frontend_bucket_arn" {
   value       = aws_s3_bucket.frontend.arn
 }
 
+output "frontend_github_actions_role_arn" {
+  description = "Role ARN used by guardbench-frontend GitHub Actions via OIDC"
+  value       = aws_iam_role.frontend_github_actions_deploy.arn
+}
+
 # ============================================
 # ALB Outputs
 # ============================================
