@@ -5,6 +5,9 @@ project     = "guardbench"
 environment = "dev"
 aws_region  = "ap-northeast-2"
 
+# 계정에 GitHub Actions OIDC provider가 이미 있다면 ARN을 설정해 중복 생성을 피합니다.
+# github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+
 # VPC / 네트워크 (기존 VPC와 CIDR 충돌하지 않도록 설정)
 vpc_cidr             = "10.1.0.0/16"
 # availability_zones = ["ap-northeast-2a", "ap-northeast-2c"]  # 기본값 사용
