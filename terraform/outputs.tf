@@ -49,6 +49,11 @@ output "frontend_github_actions_role_arn" {
   value       = aws_iam_role.frontend_github_actions_deploy.arn
 }
 
+output "backend_github_actions_role_arn" {
+  description = "Role ARN used by guardbench-backend GitHub Actions via OIDC"
+  value       = aws_iam_role.backend_github_actions_deploy.arn
+}
+
 # ============================================
 # ALB Outputs
 # ============================================

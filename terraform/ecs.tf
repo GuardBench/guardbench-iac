@@ -152,6 +152,13 @@ resource "aws_ecs_service" "app" {
   desired_count   = var.app_desired_count
   launch_type     = "FARGATE"
 
+  # GitHub Actions owns application task-definition revisions after the
+  # initial service creation. Terraform continues to own the service shape
+  # but must not roll the service back to its baseline revision.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   network_configuration {
     subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.api.id]
