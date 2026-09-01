@@ -80,3 +80,7 @@ backend workflow는 `permissions: id-token: write`, `environment: dev`, `configu
 - `ECS_CONTAINER_NAME`: `app`
 
 이 Role은 지정된 ECR repository push, `guardbench-dev-app` task definition family 등록, 해당 ECS service 조회·갱신, ECS execution/app task role에 대한 제한된 `iam:PassRole`만 허용한다. Task definition tags를 workflow에서 전달하지 않으므로 `ecs:TagResource`는 부여하지 않는다.
+
+### ECS task definition 소유권
+
+최초 ECS Service와 baseline task definition은 Terraform이 생성한다. 이후 application task definition revision과 Service의 `task_definition` 변경은 Backend GitHub Actions가 소유한다. `aws_ecs_service.app`에는 `task_definition`에 대한 `ignore_changes`가 설정되어 있어 Terraform이 CI가 배포한 revision을 이전 revision으로 되돌리지 않는다. 따라서 Terraform으로 container definition 자체를 변경한 경우에는 Backend 배포 workflow를 통해 새 revision을 배포해야 한다.
