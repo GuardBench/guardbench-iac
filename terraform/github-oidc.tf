@@ -14,7 +14,12 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
 
 locals {
   github_oidc_provider_arn = var.github_oidc_provider_arn != null ? var.github_oidc_provider_arn : aws_iam_openid_connect_provider.github_actions[0].arn
+
+  backend_task_definition_family_arn = "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${var.project}-${var.environment}-app:*"
+  backend_ecs_service_arn            = "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/${aws_ecs_cluster.main.name}/${aws_ecs_service.app.name}"
 }
+
+data "aws_partition" "current" {}
 
 data "aws_iam_policy_document" "frontend_github_actions_assume_role" {
   statement {
@@ -88,4 +93,121 @@ resource "aws_iam_role_policy" "frontend_github_actions_deploy" {
   name   = "${var.project}-${var.environment}-frontend-deploy"
   role   = aws_iam_role.frontend_github_actions_deploy.id
   policy = data.aws_iam_policy_document.frontend_github_actions_deploy.json
+}
+
+data "aws_iam_policy_document" "backend_github_actions_assume_role" {
+  statement {
+    sid     = "GitHubActionsDevEnvironment"
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [local.github_oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      # Environment subjects do not contain a branch. Restrict the GitHub
+      # dev environment's deployment branches/tags in repository settings.
+      values = [
+        "repo:GuardBench@316853045/guardbench-backend@1333885107:environment:dev",
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role" "backend_github_actions_deploy" {
+  name               = "${var.project}-${var.environment}-backend-github-deploy"
+  description        = "Deploy GuardBench dev backend from GitHub Actions via OIDC"
+  assume_role_policy = data.aws_iam_policy_document.backend_github_actions_assume_role.json
+
+  max_session_duration = 3600
+
+  tags = {
+    Name = "${var.project}-${var.environment}-backend-github-deploy"
+  }
+}
+
+data "aws_iam_policy_document" "backend_github_actions_deploy" {
+  statement {
+    sid       = "EcrAuthorization"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PushBackendImage"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:CompleteLayerUpload",
+      "ecr:DescribeImages",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+    ]
+    resources = [aws_ecr_repository.app.arn]
+  }
+
+  statement {
+    sid       = "DescribeAppTaskDefinition"
+    effect    = "Allow"
+    actions   = ["ecs:DescribeTaskDefinition"]
+    resources = [local.backend_task_definition_family_arn]
+  }
+
+  statement {
+    sid       = "RegisterAppTaskDefinition"
+    effect    = "Allow"
+    actions   = ["ecs:RegisterTaskDefinition"]
+    resources = [local.backend_task_definition_family_arn]
+  }
+
+  statement {
+    sid       = "DescribeAppService"
+    effect    = "Allow"
+    actions   = ["ecs:DescribeServices"]
+    resources = [local.backend_ecs_service_arn]
+  }
+
+  statement {
+    sid       = "UpdateAppService"
+    effect    = "Allow"
+    actions   = ["ecs:UpdateService"]
+    resources = [local.backend_ecs_service_arn]
+
+    condition {
+      test     = "ArnLike"
+      variable = "ecs:task-definition"
+      values   = [local.backend_task_definition_family_arn]
+    }
+  }
+
+  statement {
+    sid       = "PassEcsTaskRoles"
+    effect    = "Allow"
+    actions   = ["iam:PassRole"]
+    resources = [aws_iam_role.ecs_task_execution.arn, aws_iam_role.app_task.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "backend_github_actions_deploy" {
+  name   = "${var.project}-${var.environment}-backend-deploy"
+  role   = aws_iam_role.backend_github_actions_deploy.id
+  policy = data.aws_iam_policy_document.backend_github_actions_deploy.json
 }
