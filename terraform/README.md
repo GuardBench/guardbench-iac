@@ -28,13 +28,13 @@ terraform plan -out=tfplan
 
 Bootstrap 시 ECR image는 Terraform apply 전에 push한다. Task Definition은 `latest`가 아닌 immutable commit SHA tag만 받는다. 이후 Backend application 배포는 `app_image_tag` 변경이 아니라 Backend GitHub Actions로 수행한다. `alarm_email`을 설정하면 SNS email subscription이 생성되며 수신자가 AWS confirmation 메일을 승인해야 한다.
 
-Task Definition infrastructure configuration을 변경한 경우에는 다음 순서를 따른다.
+Task Definition infrastructure configuration을 변경한 경우에는 Backend issue #142가 적용된 뒤 다음 순서를 따른다.
 
 ```text
 terraform apply
 → 새로운 base Task Definition revision 등록
 → Backend GitHub Actions deploy
-→ family의 latest ACTIVE revision을 base로 image만 교체
+→ Backend #142 workflow가 family의 latest ACTIVE revision을 base로 image만 교체
 → 새로운 deployment revision 등록
 → ECS Service update
 ```
@@ -80,10 +80,11 @@ gh variable set ECR_REPOSITORY --repo GuardBench/guardbench-backend --env dev --
 gh variable set ECS_CLUSTER --repo GuardBench/guardbench-backend --env dev --body "guardbench-dev-cluster"
 gh variable set ECS_SERVICE --repo GuardBench/guardbench-backend --env dev --body "guardbench-dev-app"
 gh variable set ECS_CONTAINER_NAME --repo GuardBench/guardbench-backend --env dev --body "app"
+# Backend issue #142 적용 후 workflow에서 사용하는 변수
 gh variable set ECS_TASK_DEFINITION_FAMILY --repo GuardBench/guardbench-backend --env dev --body "guardbench-dev-app"
 ```
 
-backend workflow는 `permissions: id-token: write`, `environment: dev`, `configure-aws-credentials`의 `role-to-assume`, 그리고 다음 리소스 변수를 사용한다.
+Backend issue #142 적용 후 backend workflow는 `permissions: id-token: write`, `environment: dev`, `configure-aws-credentials`의 `role-to-assume`, 그리고 다음 리소스 변수를 사용한다. 현재 workflow가 이 계약을 적용하기 전에는 `ECS_TASK_DEFINITION_FAMILY`를 설정해도 Service의 current revision base 문제가 해결되지 않는다.
 
 - `AWS_REGION`: `ap-northeast-2`
 - `ECR_REPOSITORY`: `guardbench-dev`
@@ -96,4 +97,4 @@ backend workflow는 `permissions: id-token: write`, `environment: dev`, `configu
 
 ### ECS task definition 소유권
 
-최초 ECS Service와 baseline task definition은 Terraform이 생성한다. 이후 application task definition revision과 Service의 `task_definition` 변경은 Backend GitHub Actions가 소유한다. `aws_ecs_service.app`에는 `task_definition`에 대한 `ignore_changes`가 설정되어 있어 Terraform이 CI가 배포한 revision을 이전 revision으로 되돌리지 않는다. Backend workflow는 Service의 current revision이 아닌 family의 latest ACTIVE revision을 base로 사용해야 하며, Terraform으로 container definition 자체를 변경한 경우에는 `terraform apply` 후 Backend 배포 workflow를 실행해야 최신 설정이 유지된다. 일반 Backend 배포를 위해 `app_image_tag`를 변경하지 않는다.
+최초 ECS Service와 baseline task definition은 Terraform이 생성한다. 이후 application task definition revision과 Service의 `task_definition` 변경은 Backend GitHub Actions가 소유한다. `aws_ecs_service.app`에는 `task_definition`에 대한 `ignore_changes`가 설정되어 있어 Terraform이 CI가 배포한 revision을 이전 revision으로 되돌리지 않는다. Backend issue #142 적용 후 workflow는 Service의 current revision이 아닌 family의 latest ACTIVE revision을 base로 사용해야 하며, Terraform으로 container definition 자체를 변경한 경우에는 `terraform apply` 후 Backend 배포 workflow를 실행해야 최신 설정이 유지된다. #142 적용 전에는 현재 workflow가 Service current revision을 base로 사용하므로 이 runbook의 latest ACTIVE 보존 계약이 아직 유효하지 않다. 일반 Backend 배포를 위해 `app_image_tag`를 변경하지 않는다.
