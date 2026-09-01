@@ -68,6 +68,28 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_protocol                  = "sigv4"
 }
 
+# SPA 경로만 index.html로 재작성한다.
+# default cache behavior에만 연결되어 API 응답 상태와 본문은 변경하지 않는다.
+resource "aws_cloudfront_function" "spa_rewrite" {
+  name    = "${var.project}-${var.environment}-spa-rewrite"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite extensionless frontend routes to the SPA entry point"
+  publish = true
+  code    = <<-JS
+    function handler(event) {
+      var request = event.request;
+      var uri = request.uri;
+      var lastSegment = uri.substring(uri.lastIndexOf('/') + 1);
+
+      if (!uri.startsWith('/api/') && !lastSegment.includes('.')) {
+        request.uri = '/${var.spa_index_document}';
+      }
+
+      return request;
+    }
+  JS
+}
+
 # --- CloudFront Distribution ---
 resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
@@ -117,6 +139,11 @@ resource "aws_cloudfront_distribution" "frontend" {
     min_ttl     = 0
     default_ttl = 86400    # 1일
     max_ttl     = 31536000 # 1년
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_rewrite.arn
+    }
   }
 
   # /api/* 경로는 백엔드 ALB로 프록시 (CORS 우회용)
@@ -130,21 +157,6 @@ resource "aws_cloudfront_distribution" "frontend" {
 
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host_header.id
-  }
-
-  # SPA 클라이언트 라우팅: 404 → index.html 반환
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/${var.spa_error_document}"
-    error_caching_min_ttl = 10
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/${var.spa_error_document}"
-    error_caching_min_ttl = 10
   }
 
   # CloudFront 기본 인증서 (*.cloudfront.net)
