@@ -52,3 +52,31 @@ gh variable set AWS_DEPLOY_ROLE_ARN --repo GuardBench/guardbench-frontend --body
 frontend workflow는 `permissions: id-token: write`와 `aws-actions/configure-aws-credentials`의 `role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}`를 사용한다. OIDC 배포 성공을 확인하기 전에는 기존 Access Key secrets를 제거하지 않는다.
 
 전환 완료 후 repository의 `AWS_ACCESS_KEY_ID`와 `AWS_SECRET_ACCESS_KEY` secrets를 삭제한다. 롤백이 필요하면 workflow를 직전 revision으로 되돌리고 보관 중인 기존 secrets로 재실행한다. 보안 사고가 원인이면 기존 키를 재사용하지 말고 새 키를 발급한다. Role 자체 롤백은 frontend workflow가 더 이상 사용하지 않음을 확인한 뒤 Terraform에서 제거한다.
+
+## 백엔드 GitHub Actions OIDC 배포
+
+`backend_github_actions_role_arn`은 `GuardBench/guardbench-backend`의 `dev` Environment에서만 사용할 수 있다. Trust policy는 immutable organization/repository ID와 `environment:dev` subject, audience `sts.amazonaws.com`으로 제한된다. Environment subject에는 branch가 들어가지 않으므로 GitHub repository의 `dev` Environment에서 Deployment branches and tags를 `dev` 브랜치로 제한한다.
+
+```bash
+terraform output -raw backend_github_actions_role_arn
+gh variable set AWS_DEPLOY_ROLE_ARN \
+  --repo GuardBench/guardbench-backend \
+  --env dev \
+  --body "ROLE_ARN"
+
+gh variable set AWS_REGION --repo GuardBench/guardbench-backend --env dev --body "ap-northeast-2"
+gh variable set ECR_REPOSITORY --repo GuardBench/guardbench-backend --env dev --body "guardbench-dev"
+gh variable set ECS_CLUSTER --repo GuardBench/guardbench-backend --env dev --body "guardbench-dev-cluster"
+gh variable set ECS_SERVICE --repo GuardBench/guardbench-backend --env dev --body "guardbench-dev-app"
+gh variable set ECS_CONTAINER_NAME --repo GuardBench/guardbench-backend --env dev --body "app"
+```
+
+backend workflow는 `permissions: id-token: write`, `environment: dev`, `configure-aws-credentials`의 `role-to-assume`, 그리고 다음 리소스 변수를 사용한다.
+
+- `AWS_REGION`: `ap-northeast-2`
+- `ECR_REPOSITORY`: `guardbench-dev`
+- `ECS_CLUSTER`: `guardbench-dev-cluster`
+- `ECS_SERVICE`: `guardbench-dev-app`
+- `ECS_CONTAINER_NAME`: `app`
+
+이 Role은 지정된 ECR repository push, `guardbench-dev-app` task definition family 등록, 해당 ECS service 조회·갱신, ECS execution/app task role에 대한 제한된 `iam:PassRole`만 허용한다. Task definition tags를 workflow에서 전달하지 않으므로 `ecs:TagResource`는 부여하지 않는다.
