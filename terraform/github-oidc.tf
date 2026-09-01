@@ -159,10 +159,11 @@ data "aws_iam_policy_document" "backend_github_actions_deploy" {
   }
 
   statement {
-    sid       = "DescribeAppTaskDefinition"
-    effect    = "Allow"
-    actions   = ["ecs:DescribeTaskDefinition"]
-    resources = [local.backend_task_definition_family_arn]
+    sid     = "DescribeTaskDefinition"
+    effect  = "Allow"
+    actions = ["ecs:DescribeTaskDefinition"]
+    # ECS does not support resource-level permissions for this action.
+    resources = ["*"]
   }
 
   statement {
