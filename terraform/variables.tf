@@ -113,9 +113,3 @@ variable "spa_index_document" {
   type        = string
   default     = "index.html"
 }
-
-variable "spa_error_document" {
-  description = "Error document for SPA fallback (client-side routing)"
-  type        = string
-  default     = "index.html"
-}
