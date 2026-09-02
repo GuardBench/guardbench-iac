@@ -62,7 +62,7 @@ resource "aws_lb_target_group" "performance_api" {
   vpc_id      = aws_vpc.main.id
 
   health_check {
-    path                = "/api/v1/test-suites"
+    path                = "/health"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     timeout             = 5
