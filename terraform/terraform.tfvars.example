@@ -17,6 +17,24 @@ private_subnet_cidrs = ["10.1.10.0/24", "10.1.20.0/24"]
 # 검증된 backend commit SHA로 바꿔 사용합니다. latest tag는 허용하지 않습니다.
 app_image_tag = "0123456789abcdef0123456789abcdef01234567"
 
+# Image verified in guardbench-demo-ai-service after push.
+demo_ai_image_tag = "d9d9b4a6a36f8f7fe5548d218106dcc500ef4228"
+
+# Approved APAC Nova Micro inference profile and its six routed foundation
+# models. Do not replace these exact ARNs with '*'.
+demo_ai_bedrock_model_id = "apac.amazon.nova-micro-v1:0"
+demo_ai_bedrock_resource_arns = [
+  "arn:aws:bedrock:ap-northeast-2:508139322599:inference-profile/apac.amazon.nova-micro-v1:0",
+  "arn:aws:bedrock:ap-southeast-2::foundation-model/amazon.nova-micro-v1:0",
+  "arn:aws:bedrock:ap-northeast-1::foundation-model/amazon.nova-micro-v1:0",
+  "arn:aws:bedrock:ap-south-1::foundation-model/amazon.nova-micro-v1:0",
+  "arn:aws:bedrock:ap-northeast-2::foundation-model/amazon.nova-micro-v1:0",
+  "arn:aws:bedrock:ap-southeast-1::foundation-model/amazon.nova-micro-v1:0",
+  "arn:aws:bedrock:ap-northeast-3::foundation-model/amazon.nova-micro-v1:0",
+]
+demo_ai_enabled       = false
+demo_ai_desired_count = 1
+
 # The shared dev ECS task can target either the normal dev RDS or the isolated
 # performance-test RDS. Keep dev as the normal deployment default.
 ecs_db_target = "dev"

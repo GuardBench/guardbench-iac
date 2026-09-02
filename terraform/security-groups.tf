@@ -202,6 +202,50 @@ resource "aws_security_group_rule" "api_ingress_from_performance_alb" {
 }
 
 # ============================================
+# Demo AI Service Security Group (ECS Fargate)
+# ============================================
+resource "aws_security_group" "demo_ai" {
+  name        = "${var.project}-${var.environment}-demo-ai-sg"
+  description = "GuardBench Demo AI performance-test Fargate service"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name    = "${var.project}-${var.environment}-demo-ai-sg"
+    Purpose = "performance-testing"
+  }
+}
+
+resource "aws_security_group_rule" "demo_ai_ingress_from_performance_alb" {
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.performance_api_alb.id
+  description              = "Demo AI requests from the private performance ALB"
+  security_group_id        = aws_security_group.demo_ai.id
+}
+
+resource "aws_security_group_rule" "demo_ai_egress_to_vpc_endpoints" {
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.vpc_endpoints.id
+  description              = "Bedrock, ECR, and CloudWatch through VPC endpoints"
+  security_group_id        = aws_security_group.demo_ai.id
+}
+
+resource "aws_security_group_rule" "demo_ai_egress_to_s3_gateway" {
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  prefix_list_ids   = [aws_vpc_endpoint.s3.prefix_list_id]
+  description       = "ECR image layers through S3 Gateway endpoint"
+  security_group_id = aws_security_group.demo_ai.id
+}
+
+# ============================================
 # Performance Runner Security Group
 # ============================================
 resource "aws_security_group" "performance_runner" {
@@ -286,6 +330,7 @@ resource "aws_security_group" "vpc_endpoints" {
     security_groups = [
       aws_security_group.api.id,
       aws_security_group.performance_runner.id,
+      aws_security_group.demo_ai.id,
     ]
   }
 

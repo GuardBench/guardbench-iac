@@ -95,6 +95,70 @@ variable "app_image_tag" {
   }
 }
 
+variable "demo_ai_image_tag" {
+  description = "Immutable Git SHA tag for the verified Demo AI image"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{7,64}$", var.demo_ai_image_tag))
+    error_message = "demo_ai_image_tag must be a verified Git commit SHA; mutable tags such as latest are not allowed."
+  }
+}
+
+variable "demo_ai_bedrock_model_id" {
+  description = "Bedrock model ID passed to the Demo AI container as BEDROCK_MODEL_ID"
+  type        = string
+
+  validation {
+    condition     = trimspace(var.demo_ai_bedrock_model_id) != ""
+    error_message = "demo_ai_bedrock_model_id must be a non-empty approved Bedrock model ID or inference profile ID."
+  }
+}
+
+variable "demo_ai_bedrock_resource_arns" {
+  description = "Exact Bedrock foundation-model and/or inference-profile ARNs allowed for Demo AI InvokeModel"
+  type        = list(string)
+
+  validation {
+    condition = length(var.demo_ai_bedrock_resource_arns) > 0 && alltrue([
+      for resource_arn in var.demo_ai_bedrock_resource_arns : can(regex(
+        "^arn:(aws|aws-us-gov|aws-cn):bedrock:[a-z0-9-]+:[0-9]{0,12}:(foundation-model|inference-profile)/.+$",
+        resource_arn,
+      ))
+    ])
+    error_message = "demo_ai_bedrock_resource_arns must contain at least one exact Bedrock foundation-model or inference-profile ARN."
+  }
+}
+
+variable "demo_ai_cpu" {
+  description = "CPU units for the Demo AI Fargate task"
+  type        = number
+  default     = 512
+}
+
+variable "demo_ai_memory" {
+  description = "Memory (MiB) for the Demo AI Fargate task"
+  type        = number
+  default     = 1024
+}
+
+variable "demo_ai_desired_count" {
+  description = "Number of Demo AI Fargate tasks used as the performance-test target"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.demo_ai_desired_count >= 0
+    error_message = "demo_ai_desired_count must be zero or greater."
+  }
+}
+
+variable "demo_ai_enabled" {
+  description = "Keep Demo AI tasks running for integrated performance tests"
+  type        = bool
+  default     = false
+}
+
 variable "alarm_email" {
   description = "Optional email address that confirms the dev operations SNS subscription"
   type        = string
