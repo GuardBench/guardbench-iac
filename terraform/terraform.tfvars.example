@@ -21,9 +21,9 @@ app_image_tag = "0123456789abcdef0123456789abcdef01234567"
 # performance-test RDS. Keep dev as the normal deployment default.
 ecs_db_target = "dev"
 
-# Choose performance RDS sizing from an approved performance-test plan before
-# apply. These defaults mirror the existing dev RDS and are not a sizing decision.
-# performance_db_instance_class           = "db.t4g.micro"
-# performance_db_allocated_storage        = 20
-# performance_db_max_allocated_storage    = 100
-# performance_db_backup_retention_period  = 1
+# Performance RDS sizing has no defaults. Set every value from the approved
+# performance-test sizing decision before a plan or apply that creates it.
+# performance_db_instance_class          = "APPROVED_INSTANCE_CLASS"
+# performance_db_allocated_storage       = APPROVED_ALLOCATED_STORAGE_GIB
+# performance_db_max_allocated_storage   = APPROVED_MAX_STORAGE_GIB
+# performance_db_backup_retention_period = APPROVED_BACKUP_RETENTION_DAYS

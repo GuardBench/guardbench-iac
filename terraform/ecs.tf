@@ -53,9 +53,15 @@ resource "aws_iam_role_policy" "ecs_exec_secrets" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["secretsmanager:GetSecretValue"]
-      Resource = local.selected_db.master_secret_arn
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      # The service and circuit breaker can still start a task from either
+      # Task Definition revision while a DB target switch is being deployed.
+      # Keep both intended RDS secrets available to the shared execution role.
+      Resource = [
+        aws_db_instance.app.master_user_secret[0].secret_arn,
+        aws_db_instance.performance.master_user_secret[0].secret_arn,
+      ]
     }]
   })
 }

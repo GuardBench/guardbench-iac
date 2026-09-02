@@ -144,27 +144,28 @@ variable "dev_db_backup_retention_period" {
 }
 
 variable "performance_db_instance_class" {
-  description = "Instance class for the performance-test RDS; set this from the test sizing decision before apply"
+  description = "Required instance class for the performance-test RDS, set from the approved test sizing decision"
   type        = string
-  default     = "db.t4g.micro"
 }
 
 variable "performance_db_allocated_storage" {
-  description = "Allocated storage in GiB for the performance-test RDS"
+  description = "Required allocated storage in GiB for the performance-test RDS"
   type        = number
-  default     = 20
 }
 
 variable "performance_db_max_allocated_storage" {
-  description = "Maximum autoscaled storage in GiB for the performance-test RDS"
+  description = "Required maximum autoscaled storage in GiB for the performance-test RDS"
   type        = number
-  default     = 100
+
+  validation {
+    condition     = var.performance_db_max_allocated_storage >= var.performance_db_allocated_storage
+    error_message = "performance_db_max_allocated_storage must be greater than or equal to performance_db_allocated_storage."
+  }
 }
 
 variable "performance_db_backup_retention_period" {
-  description = "Backup retention period in days for the performance-test RDS"
+  description = "Required backup retention period in days for the performance-test RDS"
   type        = number
-  default     = 1
 }
 
 variable "spa_index_document" {
