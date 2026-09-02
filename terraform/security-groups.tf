@@ -179,6 +179,16 @@ resource "aws_security_group_rule" "performance_rds_ingress_from_api" {
   security_group_id        = aws_security_group.performance_rds.id
 }
 
+resource "aws_security_group_rule" "api_ingress_from_performance_alb" {
+  type                     = "ingress"
+  from_port                = var.api_container_port
+  to_port                  = var.api_container_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.performance_api_alb.id
+  description              = "From internal performance API ALB"
+  security_group_id        = aws_security_group.api.id
+}
+
 # ============================================
 # Performance Runner Security Group
 # ============================================
