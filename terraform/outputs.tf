@@ -80,6 +80,16 @@ output "ecs_cluster_name" {
   value       = aws_ecs_cluster.main.name
 }
 
+output "performance_runner_api_url" {
+  description = "Private ALB URL to use as PERF_BASE_URL from the performance runner"
+  value       = "http://${aws_lb.performance_api.dns_name}"
+}
+
+output "ecs_service_name" {
+  description = "Combined application ECS service name for performance-run automation"
+  value       = aws_ecs_service.app.name
+}
+
 output "ecr_repository_url" {
   description = "ECR repository URL (push images here)"
   value       = aws_ecr_repository.app.repository_url
@@ -100,6 +110,11 @@ output "performance_rds_identifier" {
   value       = aws_db_instance.performance.identifier
 }
 
+output "performance_rds_master_secret_arn" {
+  description = "Secrets Manager ARN for the isolated performance RDS credentials"
+  value       = aws_db_instance.performance.master_user_secret[0].secret_arn
+}
+
 output "performance_runner_instance_id" {
   description = "SSM-managed EC2 Spot instance used for performance-test runs"
   value       = aws_instance.performance_runner.id
@@ -110,9 +125,34 @@ output "performance_runner_security_group_id" {
   value       = aws_security_group.performance_runner.id
 }
 
+output "performance_runner_bootstrap_document_name" {
+  description = "SSM Command document that installs a packaged performance runner from private S3"
+  value       = aws_ssm_document.performance_runner_bootstrap.name
+}
+
+output "performance_results_bucket_name" {
+  description = "Private S3 bucket for runner bootstrap artifacts and performance results"
+  value       = aws_s3_bucket.performance_results.id
+}
+
 output "sqs_queue_urls" {
   description = "Source queue URLs injected into the app task definition"
   value       = { for name, queue in aws_sqs_queue.source : name => queue.url }
+}
+
+output "sqs_queue_names" {
+  description = "Source queue names used by performance-run automation"
+  value       = { for name, queue in aws_sqs_queue.source : name => queue.name }
+}
+
+output "sqs_dead_letter_queue_urls" {
+  description = "Dead-letter queue URLs used by performance-run automation"
+  value       = { for name, queue in aws_sqs_queue.dead_letter : name => queue.url }
+}
+
+output "sqs_dead_letter_queue_names" {
+  description = "Dead-letter queue names used by performance-run automation"
+  value       = { for name, queue in aws_sqs_queue.dead_letter : name => queue.name }
 }
 
 output "ops_sns_topic_arn" {

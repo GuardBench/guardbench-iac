@@ -213,6 +213,29 @@ resource "aws_security_group_rule" "performance_runner_egress_to_vpc_endpoints" 
   security_group_id        = aws_security_group.performance_runner.id
 }
 
+# The internal performance ALB is the approved in-VPC API path for the runner.
+# It avoids a NAT gateway and never exposes the API through an external CIDR.
+resource "aws_security_group_rule" "performance_runner_egress_to_alb" {
+  type                     = "egress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.performance_api_alb.id
+  description              = "Call GuardBench API through the private ALB"
+  security_group_id        = aws_security_group.performance_runner.id
+}
+
+resource "aws_security_group_rule" "performance_runner_egress_to_s3_gateway" {
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  prefix_list_ids   = [aws_vpc_endpoint.s3.prefix_list_id]
+  description       = "Read runner artifacts and preserve results through S3 Gateway endpoint"
+  security_group_id = aws_security_group.performance_runner.id
+}
+
+
 resource "aws_security_group_rule" "performance_rds_ingress_from_runner" {
   type                     = "ingress"
   from_port                = var.db_port

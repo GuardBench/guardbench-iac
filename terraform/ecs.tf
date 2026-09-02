@@ -189,6 +189,12 @@ resource "aws_ecs_service" "app" {
     container_port   = var.api_container_port
   }
 
+  load_balancer {
+    target_group_arn = aws_lb_target_group.performance_api.arn
+    container_name   = "app"
+    container_port   = var.api_container_port
+  }
+
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 
@@ -197,5 +203,5 @@ resource "aws_ecs_service" "app" {
     rollback = true
   }
 
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener.http, aws_lb_listener.performance_api]
 }

@@ -1,6 +1,6 @@
 # Dedicated, disposable execution host for the backend performance runner.
-# Runner software is intentionally not installed here: the host only provides
-# private-network access, SSM operations access, and least-privilege AWS APIs.
+# The runner artifact is supplied independently through S3, so this host can
+# later be replaced by a container runner without changing the artifact format.
 
 data "aws_ssm_parameter" "performance_runner_ami" {
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
@@ -57,6 +57,18 @@ resource "aws_iam_role_policy" "performance_runner" {
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = aws_db_instance.performance.master_user_secret[0].secret_arn
       },
+      {
+        Sid      = "ReadRunnerBootstrapArtifact"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.performance_results.arn}/performance/bootstrap/*"
+      },
+      {
+        Sid      = "WritePerformanceResults"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.performance_results.arn}/performance/results/*"
+      },
     ]
   })
 }
@@ -104,4 +116,44 @@ resource "aws_instance" "performance_runner" {
   }
 
   depends_on = [aws_iam_role_policy_attachment.performance_runner_ssm]
+}
+
+# Invoke this document after a self-contained Runner artifact is published to
+# performance/bootstrap/runner.tar.gz. The artifact supplies Python 3.11+, k6,
+# psql, Java 21/Gradle, and backend runner code without requiring NAT access.
+resource "aws_ssm_document" "performance_runner_bootstrap" {
+  name            = "${var.project}-${var.environment}-performance-runner-bootstrap"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = yamlencode({
+    schemaVersion = "2.2"
+    description   = "Install a versioned GuardBench performance runner artifact from private S3"
+    parameters = {
+      ArtifactKey = {
+        type        = "String"
+        default     = "performance/bootstrap/runner.tar.gz"
+        description = "S3 key for the self-contained performance runner artifact"
+      }
+    }
+    mainSteps = [{
+      action = "aws:runShellScript"
+      name   = "installPerformanceRunner"
+      inputs = {
+        runCommand = [
+          "set -euo pipefail",
+          "install -d -m 0755 /opt/guardbench-performance-runner",
+          "aws s3 cp s3://${aws_s3_bucket.performance_results.id}/{{ ArtifactKey }} /tmp/guardbench-performance-runner.tar.gz",
+          "rm -rf /opt/guardbench-performance-runner/*",
+          "tar -xzf /tmp/guardbench-performance-runner.tar.gz -C /opt/guardbench-performance-runner",
+          "/opt/guardbench-performance-runner/bin/verify-runtime",
+        ]
+      }
+    }]
+  })
+
+  tags = {
+    Name    = "${var.project}-${var.environment}-performance-runner-bootstrap"
+    Purpose = "performance-testing"
+  }
 }
