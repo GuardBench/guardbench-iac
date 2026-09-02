@@ -1,5 +1,15 @@
 data "aws_caller_identity" "current" {}
 
+locals {
+  selected_db = var.ecs_db_target == "performance" ? {
+    address           = aws_db_instance.performance.address
+    master_secret_arn = aws_db_instance.performance.master_user_secret[0].secret_arn
+    } : {
+    address           = aws_db_instance.app.address
+    master_secret_arn = aws_db_instance.app.master_user_secret[0].secret_arn
+  }
+}
+
 resource "aws_ecs_cluster" "main" {
   name = "${var.project}-${var.environment}-cluster"
 
@@ -45,7 +55,7 @@ resource "aws_iam_role_policy" "ecs_exec_secrets" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["secretsmanager:GetSecretValue"]
-      Resource = aws_db_instance.app.master_user_secret[0].secret_arn
+      Resource = local.selected_db.master_secret_arn
     }]
   })
 }
@@ -119,7 +129,7 @@ resource "aws_ecs_task_definition" "app" {
     environment = [
       { name = "SERVER_PORT", value = tostring(var.api_container_port) },
       { name = "SPRING_DOCKER_COMPOSE_ENABLED", value = "false" },
-      { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://${aws_db_instance.app.address}:${var.db_port}/guardbench?sslmode=require" },
+      { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://${local.selected_db.address}:${var.db_port}/guardbench?sslmode=require" },
       { name = "AWS_REGION", value = var.aws_region },
       { name = "SQS_ENABLED", value = "true" },
       { name = "WORKER_ENABLED", value = "true" },
@@ -130,8 +140,8 @@ resource "aws_ecs_task_definition" "app" {
     ]
 
     secrets = [
-      { name = "SPRING_DATASOURCE_USERNAME", valueFrom = "${aws_db_instance.app.master_user_secret[0].secret_arn}:username::" },
-      { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${aws_db_instance.app.master_user_secret[0].secret_arn}:password::" },
+      { name = "SPRING_DATASOURCE_USERNAME", valueFrom = "${local.selected_db.master_secret_arn}:username::" },
+      { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${local.selected_db.master_secret_arn}:password::" },
     ]
 
     logConfiguration = {

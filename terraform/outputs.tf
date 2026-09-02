@@ -85,6 +85,16 @@ output "rds_endpoint" {
   value       = aws_db_instance.app.address
 }
 
+output "performance_rds_endpoint" {
+  description = "Private PostgreSQL endpoint for the performance-test RDS"
+  value       = aws_db_instance.performance.address
+}
+
+output "performance_rds_identifier" {
+  description = "Identifier for the performance-test RDS"
+  value       = aws_db_instance.performance.identifier
+}
+
 output "sqs_queue_urls" {
   description = "Source queue URLs injected into the app task definition"
   value       = { for name, queue in aws_sqs_queue.source : name => queue.url }
@@ -116,6 +126,11 @@ output "worker_security_group_id" {
 output "rds_security_group_id" {
   description = "RDS PostgreSQL security group ID"
   value       = aws_security_group.rds.id
+}
+
+output "performance_rds_security_group_id" {
+  description = "Security group ID for the performance-test RDS"
+  value       = aws_security_group.performance_rds.id
 }
 
 output "vpc_endpoints_security_group_id" {

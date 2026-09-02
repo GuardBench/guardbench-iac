@@ -26,6 +26,14 @@ terraform plan -out=tfplan
 
 계획에서 기존 네트워크, S3, CloudFront, ALB, Target Group의 삭제 또는 교체가 없음을 사람이 확인한 뒤에만 `terraform apply tfplan`을 실행한다. apply는 ECR·RDS·SQS·Secrets Manager Endpoint·단일 ECS App Service·CloudWatch/SNS를 생성하거나 갱신한다.
 
+## Performance RDS 운영 전제
+
+성능 테스트용 RDS는 dev RDS와 별도로 생성되며, private subnet에 위치하고 shared dev ECS API security group에서만 PostgreSQL 접근을 허용한다. ECS와 SQS/DLQ는 dev 환경과 공유한다. 따라서 성능 측정 중에는 다른 dev workload가 없어야 하며, 실행 전 Performance Runner가 기존 TestRun과 Source Queue/DLQ 상태를 검증해야 한다.
+
+기본값인 `ecs_db_target = "dev"`는 기존 dev RDS를 사용한다. 성능 테스트를 위해서는 `ecs_db_target = "performance"`으로 plan/apply하여 ECS task definition의 JDBC endpoint와 Secrets Manager username/password가 모두 Performance RDS를 참조하게 한다. Performance RDS의 instance class와 storage 변수는 적용 전에 성능 계획에 따라 설정한다. credential은 Terraform output이나 task definition plaintext에 노출하지 않는다.
+
+task definition revision을 외부 배포 workflow가 갱신하는 경우에는 전체 apply 전 `terraform plan`에서 `aws_ecs_service.app`이 현재 정상 revision을 이전 revision으로 바꾸지 않는지 반드시 확인한다.
+
 ECR image는 Terraform apply 전에 push한다. Task Definition은 `latest`가 아닌 immutable commit SHA tag만 받는다. `alarm_email`을 설정하면 SNS email subscription이 생성되며 수신자가 AWS confirmation 메일을 승인해야 한다.
 
 ## 프론트엔드 GitHub Actions OIDC 배포

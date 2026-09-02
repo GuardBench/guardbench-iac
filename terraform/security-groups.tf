@@ -87,6 +87,16 @@ resource "aws_security_group_rule" "api_egress_to_rds" {
   security_group_id        = aws_security_group.api.id
 }
 
+resource "aws_security_group_rule" "api_egress_to_performance_rds" {
+  type                     = "egress"
+  from_port                = var.db_port
+  to_port                  = var.db_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.performance_rds.id
+  description              = "To performance-test RDS PostgreSQL"
+  security_group_id        = aws_security_group.api.id
+}
+
 # ============================================
 # Worker Security Group (Orchestrator + Executor)
 # ============================================
@@ -143,6 +153,30 @@ resource "aws_security_group_rule" "rds_ingress_from_api" {
   source_security_group_id = aws_security_group.api.id
   description              = "From API service"
   security_group_id        = aws_security_group.rds.id
+}
+
+# ============================================
+# Performance RDS Security Group
+# ============================================
+resource "aws_security_group" "performance_rds" {
+  name        = "${var.project}-${var.environment}-performance-rds-sg"
+  description = "GuardBench performance-test RDS PostgreSQL"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name    = "${var.project}-${var.environment}-performance-rds-sg"
+    Purpose = "performance-testing"
+  }
+}
+
+resource "aws_security_group_rule" "performance_rds_ingress_from_api" {
+  type                     = "ingress"
+  from_port                = var.db_port
+  to_port                  = var.db_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.api.id
+  description              = "From shared dev API service"
+  security_group_id        = aws_security_group.performance_rds.id
 }
 
 # ============================================

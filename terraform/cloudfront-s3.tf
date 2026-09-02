@@ -70,12 +70,10 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 
 # SPA 경로만 index.html로 재작성한다.
 # default cache behavior에만 연결되어 API 응답 상태와 본문은 변경하지 않는다.
-resource "aws_cloudfront_function" "spa_rewrite" {
-  name    = "${var.project}-${var.environment}-spa-rewrite"
-  runtime = "cloudfront-js-2.0"
-  comment = "Rewrite extensionless frontend routes to the SPA entry point"
-  publish = true
-  code    = <<-JS
+locals {
+  # CloudFront stores function source with LF endings even when the repository
+  # is checked out with CRLF endings.
+  spa_rewrite_function_code = replace(<<-JS
     function handler(event) {
       var request = event.request;
       var uri = request.uri;
@@ -88,6 +86,15 @@ resource "aws_cloudfront_function" "spa_rewrite" {
       return request;
     }
   JS
+  , "\r\n", "\n")
+}
+
+resource "aws_cloudfront_function" "spa_rewrite" {
+  name    = "${var.project}-${var.environment}-spa-rewrite"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite extensionless frontend routes to the SPA entry point"
+  publish = true
+  code    = local.spa_rewrite_function_code
 }
 
 # --- CloudFront Distribution ---

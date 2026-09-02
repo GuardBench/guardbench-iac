@@ -108,6 +108,65 @@ variable "db_port" {
   default     = 5432
 }
 
+variable "ecs_db_target" {
+  description = "Database target injected into the shared dev ECS task definition"
+  type        = string
+  default     = "dev"
+
+  validation {
+    condition     = contains(["dev", "performance"], var.ecs_db_target)
+    error_message = "ecs_db_target must be either dev or performance."
+  }
+}
+
+variable "dev_db_instance_class" {
+  description = "Instance class for the development RDS"
+  type        = string
+  default     = "db.t4g.micro"
+}
+
+variable "dev_db_allocated_storage" {
+  description = "Allocated storage in GiB for the development RDS"
+  type        = number
+  default     = 20
+}
+
+variable "dev_db_max_allocated_storage" {
+  description = "Maximum autoscaled storage in GiB for the development RDS"
+  type        = number
+  default     = 100
+}
+
+variable "dev_db_backup_retention_period" {
+  description = "Backup retention period in days for the development RDS"
+  type        = number
+  default     = 1
+}
+
+variable "performance_db_instance_class" {
+  description = "Instance class for the performance-test RDS; set this from the test sizing decision before apply"
+  type        = string
+  default     = "db.t4g.micro"
+}
+
+variable "performance_db_allocated_storage" {
+  description = "Allocated storage in GiB for the performance-test RDS"
+  type        = number
+  default     = 20
+}
+
+variable "performance_db_max_allocated_storage" {
+  description = "Maximum autoscaled storage in GiB for the performance-test RDS"
+  type        = number
+  default     = 100
+}
+
+variable "performance_db_backup_retention_period" {
+  description = "Backup retention period in days for the performance-test RDS"
+  type        = number
+  default     = 1
+}
+
 variable "spa_index_document" {
   description = "Index document for S3 static hosting"
   type        = string
