@@ -1,6 +1,5 @@
-# Bootstrap artifacts and immutable output use separate prefixes. Only
-# completed run results expire after 30 days, so replacement Spot instances can
-# continue to retrieve the bootstrap artifact.
+# Performance run output is kept in a private bucket. Only completed run
+# results expire after 30 days; runner images are stored in ECR.
 resource "aws_s3_bucket" "performance_results" {
   bucket = "${var.project}-${var.environment}-performance-results-${data.aws_caller_identity.current.account_id}"
 

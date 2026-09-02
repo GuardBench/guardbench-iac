@@ -45,7 +45,18 @@ terraform apply
 
 기본값인 `ecs_db_target = "dev"`는 기존 dev RDS를 사용한다. 성능 테스트를 위해서는 `ecs_db_target = "performance"`으로 Terraform apply하여 JDBC endpoint와 Secrets Manager username/password가 모두 Performance RDS를 참조하는 baseline Task Definition을 등록한다. 이후 Backend issue #142가 적용된 Backend GitHub Actions deploy를 실행해 latest ACTIVE revision을 기반으로 ECS Service에 반영한다. Performance RDS의 instance class, storage, backup retention 변수에는 default가 없으므로 적용 전에 승인된 성능 계획 값을 모두 명시해야 한다. shared ECS task execution role에는 Dev와 Performance RDS의 두 master secret만 허용해, 전환 중 기존 revision 재시작 또는 circuit breaker rollback도 안전하게 지원한다. credential은 Terraform output이나 task definition plaintext에 노출하지 않는다.
 
-전용 Performance Runner EC2는 `performance_runner_enabled = false`가 기본값이며 일반적인 `dev` 배포에서는 생성하지 않는다. 성능 테스트를 실행할 때만 이 값을 `true`로 설정하고 Terraform apply를 수행한다. Spot runner는 `one-time` 요청이므로 테스트 종료 후 인스턴스를 삭제하거나 중단하면 다음 테스트 전에 다시 apply해야 한다.
+전용 Performance Runner EC2는 `performance_runner_enabled = false`가 기본값이며 일반적인 `dev` 배포에서는 생성하지 않는다. Backend의 `performance/build-runner-image.sh`로 이미지를 빌드하고 Terraform output의 전용 ECR repository에 Backend commit SHA tag로 push한 뒤, 성능 테스트를 실행할 때만 이 값을 `true`로 설정하고 Terraform apply를 수행한다. Spot runner는 `one-time` 요청이므로 테스트 종료 후 인스턴스를 삭제하거나 중단하면 다음 테스트 전에 다시 apply해야 한다.
+
+```bash
+runner_repository="$(terraform output -raw performance_runner_ecr_repository_url)"
+runner_revision="$(git -C ../guardbench-backend rev-parse HEAD)"
+../guardbench-backend/performance/build-runner-image.sh "$runner_repository"
+aws ecr get-login-password --region ap-northeast-2 \
+  | docker login --username AWS --password-stdin "${runner_repository%%/*}"
+../guardbench-backend/bin/publish-runner-image "$runner_repository:$runner_revision"
+```
+
+Runner EC2는 ECS Optimized AL2023 AMI를 사용하므로 private subnet에서 별도 Docker 패키지 다운로드가 필요 없다. Terraform apply 후 SSM Command document를 `RunnerImage=$runner_repository:$runner_revision` 파라미터로 실행하면 ECR pull과 image `verify-runtime` 검증이 수행된다. 실제 Runner 실행에 필요한 `PERF_*` 환경변수와 profile/dataset은 Backend 성능테스트 문서의 실행 절차를 따른다.
 
 ## 프론트엔드 GitHub Actions OIDC 배포
 

@@ -241,7 +241,7 @@ resource "aws_security_group_rule" "performance_runner_egress_to_s3_gateway" {
   to_port           = 443
   protocol          = "tcp"
   prefix_list_ids   = [aws_vpc_endpoint.s3.prefix_list_id]
-  description       = "Read runner artifacts and preserve results through S3 Gateway endpoint"
+  description       = "ECR image layers and performance results through S3 Gateway endpoint"
   security_group_id = aws_security_group.performance_runner.id
 }
 
