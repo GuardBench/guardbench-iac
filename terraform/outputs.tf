@@ -16,6 +16,16 @@ output "private_subnet_ids" {
   value       = aws_subnet.private[*].id
 }
 
+output "nat_gateway_id" {
+  description = "NAT Gateway used by private ECS subnets for external HTTPS egress"
+  value       = aws_nat_gateway.main.id
+}
+
+output "nat_gateway_public_ip" {
+  description = "Public EIP used by the private-subnet NAT Gateway"
+  value       = aws_eip.nat.public_ip
+}
+
 # ============================================
 # CloudFront / S3 Outputs
 # ============================================

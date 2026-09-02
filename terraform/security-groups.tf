@@ -64,6 +64,18 @@ resource "aws_security_group_rule" "api_egress_to_vpc_endpoints" {
   security_group_id        = aws_security_group.api.id
 }
 
+# The API calls external AI providers through the private subnet NAT Gateway.
+# Keep tasks private; allow only outbound HTTPS to the provider endpoint.
+resource "aws_security_group_rule" "api_egress_to_external_https" {
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "External HTTPS endpoints via NAT Gateway"
+  security_group_id = aws_security_group.api.id
+}
+
 # ECR image layer downloads use the S3 Gateway endpoint rather than an
 # interface endpoint ENI. Restrict the task egress to the endpoint's managed
 # S3 prefix list; no internet or NAT route is required.
