@@ -47,6 +47,34 @@ terraform apply
 
 전용 Performance Runner EC2는 `performance_runner_enabled = false`가 기본값이며 일반적인 `dev` 배포에서는 생성하지 않는다. Backend의 `performance/build-runner-image.sh`로 이미지를 빌드하고 Terraform output의 전용 ECR repository에 Backend commit SHA tag로 push한 뒤, 성능 테스트를 실행할 때만 이 값을 `true`로 설정하고 Terraform apply를 수행한다. Spot runner는 `one-time` 요청이므로 테스트 종료 후 인스턴스를 삭제하거나 중단하면 다음 테스트 전에 다시 apply해야 한다.
 
+## Demo AI 성능 테스트 Target
+
+Demo AI는 기존 `guardbench-dev-cluster`를 재사용하는 별도 Fargate Task Definition/Service다. Backend `guardbench-dev-app`의 sidecar가 아니며, 전용 task role·execution role·CloudWatch Log Group·security group을 사용한다. Demo AI image는 `guardbench-demo-ai-service` 전용 ECR repository의 immutable Git SHA tag로 지정한다. 기존 `performance_runner_enabled` 패턴에 맞춰 `demo_ai_enabled = false`가 기본값이며, 성능 테스트 시 `true`로 켜고 종료 후 다시 끌 수 있다.
+
+기존 `guardbench-dev-performance-api` internal ALB를 재사용하고 `/v1/chat/completions` path rule만 Demo AI target group으로 전달한다. 기존 ALB default action과 Backend target group은 변경하지 않는다. ALB health check는 Demo AI의 `GET /health`를 사용한다. Runner SG에서 internal ALB SG로 HTTP 80, ALB SG에서 Demo AI task SG로 TCP 8080만 허용되며, Demo AI task는 private subnet에서 `assign_public_ip = false`로 실행된다.
+
+Demo AI task의 유일한 AWS API 권한은 입력된 정확한 `demo_ai_bedrock_resource_arns`에 대한 `bedrock:InvokeModel`이다. ECR pull과 CloudWatch Logs에는 Demo AI 전용 execution role을 사용하므로 Backend RDS secret 권한을 공유하지 않는다. task는 기존 `bedrock-runtime`, ECR, Logs VPC Endpoint와 S3 Gateway Endpoint를 사용하며 NAT 또는 인터넷 경로에 의존하지 않는다.
+
+다음 변수는 실제 환경 계약을 확인한 값으로 명시해야 한다.
+
+- `demo_ai_image_tag`: Demo AI repository에 push한 verified Git SHA
+- `demo_ai_bedrock_model_id`: container의 `BEDROCK_MODEL_ID` 값
+- `demo_ai_bedrock_resource_arns`: 해당 model 또는 cross-region inference profile의 정확한 허용 ARN 목록
+
+ECR repository 자체도 Terraform 소유이므로 첫 배포는 repository 생성과 image push를 분리한다. 먼저 검토된 plan에서 `aws_ecr_repository.demo_ai`와 lifecycle policy만 bootstrap apply하고, output의 `demo_ai_ecr_repository_url`에 `d9d9b4a6a36f8f7fe5548d218106dcc500ef4228` image를 push한다. 그 다음 `demo_ai_image_tag`를 입력하고 `demo_ai_enabled = true`로 설정한 전체 plan/apply에서 ECS Service를 시작한다. image push 전에는 이 SHA로 ECS Service를 apply하지 않는다.
+
+자동 Demo AI CI/CD는 이 Terraform 변경에 포함하지 않는다. 현재 Demo AI 배포 revision은 Terraform이 task definition과 service를 소유한다. 별도 CI가 revision을 소유하게 되면, 이 task definition/service의 deployment ownership과 `ignore_changes` 정책을 함께 재검토해야 한다.
+
+Runner가 사용할 값은 apply 후 다음 output으로 확인한다.
+
+```bash
+terraform output -raw performance_target_url
+terraform output -raw performance_target_model
+terraform output -raw performance_target_revision
+```
+
+이는 각각 `PERF_TARGET_URL`, `PERF_TARGET_MODEL`, `PERF_TARGET_REVISION`에 매핑된다. 현재 값은 `http://<internal-performance-alb>/v1/chat/completions`, `demo-model`, Demo AI immutable image tag다. Runner는 Demo AI container를 실행하지 않고 HTTP client 역할만 수행한다.
+
 ```bash
 runner_repository="$(terraform output -raw performance_runner_ecr_repository_url)"
 runner_revision="$(git -C ../guardbench-backend rev-parse HEAD)"
