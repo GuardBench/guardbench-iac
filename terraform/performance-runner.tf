@@ -79,6 +79,7 @@ resource "aws_iam_instance_profile" "performance_runner" {
 }
 
 resource "aws_instance" "performance_runner" {
+  count                       = var.performance_runner_enabled ? 1 : 0
   ami                         = data.aws_ssm_parameter.performance_runner_ami.value
   instance_type               = var.performance_runner_instance_type
   subnet_id                   = aws_subnet.private[0].id

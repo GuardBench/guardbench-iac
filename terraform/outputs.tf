@@ -117,7 +117,7 @@ output "performance_rds_master_secret_arn" {
 
 output "performance_runner_instance_id" {
   description = "SSM-managed EC2 Spot instance used for performance-test runs"
-  value       = aws_instance.performance_runner.id
+  value       = var.performance_runner_enabled ? aws_instance.performance_runner[0].id : null
 }
 
 output "performance_runner_security_group_id" {
