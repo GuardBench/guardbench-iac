@@ -9,6 +9,15 @@
 3. `terraform init -input=false` 후 `terraform state list`를 실행한다.
 4. state에 없는 기존 리소스만 해당 Terraform address로 import한다. import 대상과 ID는 적용 직전에 AWS 조회 결과로 확정한다.
 
+현재 dev 계정에 이미 수동 생성된 NAT Gateway가 있다면 중복 생성을 막기 위해 apply 전에 해당 EIP, NAT Gateway, private default route를 import한다.
+
+```bash
+terraform import aws_eip.nat eipalloc-...
+terraform import aws_nat_gateway.main nat-...
+terraform import aws_route.private_nat 'rtb-..._0.0.0.0/0'
+terraform import aws_security_group_rule.api_egress_to_external_https 'sg-..._egress_tcp_443_443_0.0.0.0/0'
+```
+
 ```bash
 terraform import aws_vpc.main vpc-...
 terraform import 'aws_subnet.public[0]' subnet-...
@@ -24,7 +33,7 @@ terraform validate
 terraform plan -out=tfplan
 ```
 
-계획에서 기존 네트워크, S3, CloudFront, ALB, Target Group의 삭제 또는 교체가 없음을 사람이 확인한 뒤에만 `terraform apply tfplan`을 실행한다. apply는 ECR·RDS·SQS·Secrets Manager Endpoint·단일 ECS App Service·CloudWatch/SNS를 생성하거나 갱신한다. Terraform apply 자체는 Backend application 재배포를 의미하지 않는다.
+계획에서 기존 네트워크, NAT Gateway/EIP, S3, CloudFront, ALB, Target Group의 삭제 또는 교체가 없음을 사람이 확인한 뒤에만 `terraform apply tfplan`을 실행한다. apply는 NAT 기반 private-subnet 외부 HTTPS egress, ECR·RDS·SQS·Secrets Manager Endpoint·단일 ECS App Service·CloudWatch/SNS를 생성하거나 갱신한다. Terraform apply 자체는 Backend application 재배포를 의미하지 않는다.
 
 Bootstrap 시 ECR image는 Terraform apply 전에 push한다. Task Definition은 `latest`가 아닌 immutable commit SHA tag만 받는다. 이후 Backend application 배포는 `app_image_tag` 변경이 아니라 Backend GitHub Actions로 수행한다. `alarm_email`을 설정하면 SNS email subscription이 생성되며 수신자가 AWS confirmation 메일을 승인해야 한다.
 
@@ -43,7 +52,7 @@ terraform apply
 
 성능 테스트용 RDS는 dev RDS와 별도로 생성되며, private subnet에 위치하고 shared dev ECS API security group에서만 PostgreSQL 접근을 허용한다. ECS와 SQS/DLQ는 dev 환경과 공유한다. 따라서 성능 측정 중에는 다른 dev workload가 없어야 하며, 실행 전 Performance Runner가 기존 TestRun과 Source Queue/DLQ 상태를 검증해야 한다.
 
-기본값인 `ecs_db_target = "dev"`는 기존 dev RDS를 사용한다. 성능 테스트를 위해서는 `ecs_db_target = "performance"`으로 Terraform apply하여 JDBC endpoint와 Secrets Manager username/password가 모두 Performance RDS를 참조하는 baseline Task Definition을 등록한다. 이후 Backend issue #142가 적용된 Backend GitHub Actions deploy를 실행해 latest ACTIVE revision을 기반으로 ECS Service에 반영한다. Performance RDS의 instance class, storage, backup retention 변수에는 default가 없으므로 적용 전에 승인된 성능 계획 값을 모두 명시해야 한다. shared ECS task execution role에는 Dev와 Performance RDS의 두 master secret만 허용해, 전환 중 기존 revision 재시작 또는 circuit breaker rollback도 안전하게 지원한다. credential은 Terraform output이나 task definition plaintext에 노출하지 않는다.
+기본값인 `ecs_db_target = "dev"`는 기존 dev RDS를 사용한다. 성능 테스트를 위해서는 `ecs_db_target = "performance"`으로 Terraform apply하여 JDBC endpoint와 Secrets Manager username/password가 모두 Performance RDS를 참조하는 baseline Task Definition을 등록한다. 이후 Backend issue #142가 적용된 Backend GitHub Actions deploy를 실행해 latest ACTIVE revision을 기반으로 ECS Service에 반영한다. Performance RDS의 instance class, storage, backup retention 변수에는 default가 없으므로 적용 전에 승인된 성능 계획 값을 모두 명시해야 한다. shared ECS task execution role에는 Dev와 Performance RDS의 두 master secret만 허용해, 전환 중 기존 revision 재시작 또는 circuit breaker rollback도 안전하게 지원한다. credential은 Terraform output이나 task definition plaintext에 노출하지 않는다. 외부 AI provider를 호출하는 ECS task는 private route table의 NAT Gateway와 API security group의 outbound HTTPS rule을 사용한다. AWS Bedrock 등 VPC Endpoint가 지원하는 서비스는 기존 private endpoint를 우선 사용한다.
 
 전용 Performance Runner EC2는 `performance_runner_enabled = false`가 기본값이며 일반적인 `dev` 배포에서는 생성하지 않는다. Backend의 `performance/build-runner-image.sh`로 이미지를 빌드하고 Terraform output의 전용 ECR repository에 Backend commit SHA tag로 push한 뒤, 성능 테스트를 실행할 때만 이 값을 `true`로 설정하고 Terraform apply를 수행한다. Spot runner는 `one-time` 요청이므로 테스트 종료 후 인스턴스를 삭제하거나 중단하면 다음 테스트 전에 다시 apply해야 한다.
 

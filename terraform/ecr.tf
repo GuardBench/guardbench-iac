@@ -78,10 +78,11 @@ resource "aws_ecr_lifecycle_policy" "performance_runner" {
   })
 }
 
-# Dedicated repository for the OpenAI-compatible performance-test target.
-# Keep it separate from both the backend and performance runner images.
+# Preserve the existing Demo AI image repository that is already managed in
+# the shared state. It is not part of the application deployment, but omitting
+# an existing state address would make Terraform plan its deletion.
 resource "aws_ecr_repository" "demo_ai" {
-  name                 = "${var.project}-demo-ai-service"
+  name                 = "guardbench-demo-ai-service"
   image_tag_mutability = "IMMUTABLE"
   force_delete         = false
 
@@ -90,7 +91,7 @@ resource "aws_ecr_repository" "demo_ai" {
   }
 
   tags = {
-    Name    = "${var.project}-demo-ai-service-ecr"
+    Name    = "guardbench-demo-ai-service-ecr"
     Purpose = "performance-testing"
   }
 }

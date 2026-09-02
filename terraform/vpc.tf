@@ -24,6 +24,31 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
+# Single NAT Gateway for the dev private subnets. External AI providers are
+# not covered by AWS service VPC endpoints, so ECS needs an outbound internet
+# path while remaining private and without public task IPs.
+resource "aws_eip" "nat" {
+  domain = "vpc"
+
+  tags = {
+    Name    = "${var.project}-${var.environment}-nat-eip"
+    Purpose = "private-subnet-egress"
+  }
+}
+
+resource "aws_nat_gateway" "main" {
+  allocation_id     = aws_eip.nat.id
+  subnet_id         = aws_subnet.public[0].id
+  connectivity_type = "public"
+
+  tags = {
+    Name    = "${var.project}-${var.environment}-nat"
+    Purpose = "private-subnet-egress"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
 # ============================================
 # 퍼블릭 서브넷 (2 AZ) - ALB 배치
 # ============================================
@@ -87,6 +112,15 @@ resource "aws_route_table" "private" {
   tags = {
     Name = "${var.project}-${var.environment}-private-rt"
   }
+}
+
+# Keep the default route separate from the route table resource so the
+# existing manually-created NAT route can be imported without replacing the
+# route table or its S3 endpoint route.
+resource "aws_route" "private_nat" {
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.main.id
 }
 
 resource "aws_route_table_association" "private" {

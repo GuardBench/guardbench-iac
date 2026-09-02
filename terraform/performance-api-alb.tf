@@ -1,5 +1,5 @@
-# The public ALB has no private-subnet route without NAT. This internal ALB is
-# therefore the explicit, SG-scoped PERF_BASE_URL path for the Spot runner.
+# Keep the internal ALB as the explicit, SG-scoped PERF_BASE_URL path for the
+# Spot runner. NAT is reserved for external HTTPS egress, not internal API calls.
 resource "aws_security_group" "performance_api_alb" {
   name        = "${var.project}-${var.environment}-performance-api-alb-sg"
   description = "Internal ALB that exposes GuardBench API only to the performance runner"
