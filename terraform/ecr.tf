@@ -77,3 +77,42 @@ resource "aws_ecr_lifecycle_policy" "performance_runner" {
     ]
   })
 }
+
+# Preserve the existing Demo AI image repository that is already managed in
+# the shared state. It is not part of the application deployment, but omitting
+# an existing state address would make Terraform plan its deletion.
+resource "aws_ecr_repository" "demo_ai" {
+  name                 = "guardbench-demo-ai-service"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Name    = "guardbench-demo-ai-service-ecr"
+    Purpose = "performance-testing"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "demo_ai" {
+  repository = aws_ecr_repository.demo_ai.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep the last 10 Demo AI images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
