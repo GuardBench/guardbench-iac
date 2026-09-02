@@ -25,6 +25,34 @@ terraform import aws_lb.main arn:aws:elasticloadbalancing:...
 terraform import aws_cloudfront_distribution.frontend DISTRIBUTION_ID
 ```
 
+## Backend ECS capacity 실험
+
+Backend ECS task 수는 `backend_service_desired_counts` 한 곳에서 서비스 역할별로 관리한다. 현재는 API와 worker가 `guardbench-dev-app` 하나의 결합 서비스에서 실행되므로 `app` 값이 해당 서비스의 `desired_count`를 제어한다. API/worker 서비스가 분리되면 같은 입력에 `api`와 `worker` 값을 추가하고 각 서비스가 해당 키를 사용하도록 확장한다. 이 작업은 역할별 최적 task 수를 결정하지 않는다.
+
+성능 테스트에서 결합된 현재 서비스를 2개로 바꾸려면 `terraform.tfvars`의 입력만 변경한다.
+
+```hcl
+backend_service_desired_counts = {
+  app = 2
+}
+```
+
+역할 분리 이후에는 다음처럼 각 서비스의 capacity 조합을 반복해서 측정할 수 있다.
+
+```hcl
+backend_service_desired_counts = {
+  api    = 2
+  worker = 4
+}
+```
+
+```bash
+terraform plan -var='backend_service_desired_counts={app=2}'
+terraform apply
+```
+
+현재 결합 서비스의 `app` 값 변경은 `aws_ecs_service.app`의 `desired_count`만 갱신하며 task definition이나 다른 서비스의 capacity를 변경하지 않는다. `terraform plan`에서 이 변경이 의도한 ECS Service update인지 확인한 뒤 apply한다.
+
 ## 배포 순서
 
 ```bash

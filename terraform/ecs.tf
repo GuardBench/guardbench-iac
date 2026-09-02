@@ -1,6 +1,14 @@
 data "aws_caller_identity" "current" {}
 
 locals {
+  # Keep all backend service capacity inputs in one map. The app service is
+  # currently the combined API/worker service; api and worker can be consumed
+  # by their respective resources when the backend is split.
+  backend_service_desired_counts = merge(
+    { app = 1 },
+    var.backend_service_desired_counts,
+  )
+
   selected_db = var.ecs_db_target == "performance" ? {
     address           = aws_db_instance.performance.address
     master_secret_arn = aws_db_instance.performance.master_user_secret[0].secret_arn
@@ -167,7 +175,7 @@ resource "aws_ecs_service" "app" {
   name            = "${var.project}-${var.environment}-app"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = var.app_desired_count
+  desired_count   = local.backend_service_desired_counts["app"]
   launch_type     = "FARGATE"
 
   # GitHub Actions owns application task-definition revisions after the
