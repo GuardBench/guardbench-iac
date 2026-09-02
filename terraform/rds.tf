@@ -43,8 +43,10 @@ resource "aws_db_instance" "performance" {
   engine         = "postgres"
   engine_version = "16.14"
   instance_class = var.performance_db_instance_class
-  db_name        = "guardbench"
-  username       = "guardbench"
+  # The performance runner rejects destructive resets unless this isolated
+  # database name is used.
+  db_name  = "guardbench_perf"
+  username = "guardbench"
 
   manage_master_user_password = true
   storage_encrypted           = true

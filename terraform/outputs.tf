@@ -100,6 +100,16 @@ output "performance_rds_identifier" {
   value       = aws_db_instance.performance.identifier
 }
 
+output "performance_runner_instance_id" {
+  description = "SSM-managed EC2 Spot instance used for performance-test runs"
+  value       = aws_instance.performance_runner.id
+}
+
+output "performance_runner_security_group_id" {
+  description = "Security group ID for the performance-test runner"
+  value       = aws_security_group.performance_runner.id
+}
+
 output "sqs_queue_urls" {
   description = "Source queue URLs injected into the app task definition"
   value       = { for name, queue in aws_sqs_queue.source : name => queue.url }

@@ -180,6 +180,50 @@ resource "aws_security_group_rule" "performance_rds_ingress_from_api" {
 }
 
 # ============================================
+# Performance Runner Security Group
+# ============================================
+resource "aws_security_group" "performance_runner" {
+  name        = "${var.project}-${var.environment}-performance-runner-sg"
+  description = "GuardBench EC2 performance-test runner; no inbound access"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name    = "${var.project}-${var.environment}-performance-runner-sg"
+    Purpose = "performance-testing"
+  }
+}
+
+resource "aws_security_group_rule" "performance_runner_egress_to_rds" {
+  type                     = "egress"
+  from_port                = var.db_port
+  to_port                  = var.db_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.performance_rds.id
+  description              = "Reset and migrate performance-test RDS"
+  security_group_id        = aws_security_group.performance_runner.id
+}
+
+resource "aws_security_group_rule" "performance_runner_egress_to_vpc_endpoints" {
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.vpc_endpoints.id
+  description              = "AWS APIs through VPC endpoints"
+  security_group_id        = aws_security_group.performance_runner.id
+}
+
+resource "aws_security_group_rule" "performance_rds_ingress_from_runner" {
+  type                     = "ingress"
+  from_port                = var.db_port
+  to_port                  = var.db_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.performance_runner.id
+  description              = "From dedicated performance-test runner"
+  security_group_id        = aws_security_group.performance_rds.id
+}
+
+# ============================================
 # VPC Endpoints Security Group
 # ============================================
 resource "aws_security_group" "vpc_endpoints" {
@@ -187,13 +231,17 @@ resource "aws_security_group" "vpc_endpoints" {
   description = "GuardBench VPC Endpoints - allow HTTPS from private subnets"
   vpc_id      = aws_vpc.main.id
 
-  # 기존 state가 inline ingress를 소유한다. API만 남겨 Worker 접근을 제거한다.
+  # Existing state owns this inline ingress. Allow the combined app service
+  # and the dedicated performance runner, but not the legacy worker group.
   ingress {
-    description     = "HTTPS from the combined app service"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.api.id]
+    description = "HTTPS from the combined app service"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    security_groups = [
+      aws_security_group.api.id,
+      aws_security_group.performance_runner.id,
+    ]
   }
 
   tags = {

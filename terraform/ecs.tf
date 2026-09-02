@@ -4,9 +4,11 @@ locals {
   selected_db = var.ecs_db_target == "performance" ? {
     address           = aws_db_instance.performance.address
     master_secret_arn = aws_db_instance.performance.master_user_secret[0].secret_arn
+    database_name     = "guardbench_perf"
     } : {
     address           = aws_db_instance.app.address
     master_secret_arn = aws_db_instance.app.master_user_secret[0].secret_arn
+    database_name     = "guardbench"
   }
 }
 
@@ -135,7 +137,7 @@ resource "aws_ecs_task_definition" "app" {
     environment = [
       { name = "SERVER_PORT", value = tostring(var.api_container_port) },
       { name = "SPRING_DOCKER_COMPOSE_ENABLED", value = "false" },
-      { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://${local.selected_db.address}:${var.db_port}/guardbench?sslmode=require" },
+      { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://${local.selected_db.address}:${var.db_port}/${local.selected_db.database_name}?sslmode=require" },
       { name = "AWS_REGION", value = var.aws_region },
       { name = "SQS_ENABLED", value = "true" },
       { name = "WORKER_ENABLED", value = "true" },

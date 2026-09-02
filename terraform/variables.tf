@@ -168,6 +168,29 @@ variable "performance_db_backup_retention_period" {
   type        = number
 }
 
+variable "performance_runner_instance_type" {
+  description = "EC2 instance type for the dedicated performance-test runner"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "performance_runner_root_volume_gb" {
+  description = "gp3 root-volume size in GiB for the performance-test runner"
+  type        = number
+  default     = 20
+
+  validation {
+    condition     = var.performance_runner_root_volume_gb >= 8
+    error_message = "performance_runner_root_volume_gb must be at least 8 GiB."
+  }
+}
+
+variable "performance_runner_spot" {
+  description = "Launch the performance-test runner as a Spot instance"
+  type        = bool
+  default     = true
+}
+
 variable "spa_index_document" {
   description = "Index document for S3 static hosting"
   type        = string
