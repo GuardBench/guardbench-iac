@@ -77,3 +77,41 @@ resource "aws_ecr_lifecycle_policy" "performance_runner" {
     ]
   })
 }
+
+# Dedicated repository for the OpenAI-compatible performance-test target.
+# Keep it separate from both the backend and performance runner images.
+resource "aws_ecr_repository" "demo_ai" {
+  name                 = "${var.project}-demo-ai-service"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Name    = "${var.project}-demo-ai-service-ecr"
+    Purpose = "performance-testing"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "demo_ai" {
+  repository = aws_ecr_repository.demo_ai.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep the last 10 Demo AI images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}

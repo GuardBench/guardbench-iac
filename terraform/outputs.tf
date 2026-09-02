@@ -135,6 +135,36 @@ output "performance_runner_ecr_repository_url" {
   value       = aws_ecr_repository.performance_runner.repository_url
 }
 
+output "demo_ai_ecr_repository_url" {
+  description = "Private ECR repository URL for immutable Demo AI images"
+  value       = aws_ecr_repository.demo_ai.repository_url
+}
+
+output "demo_ai_ecs_service_name" {
+  description = "Dedicated Demo AI ECS service name"
+  value       = aws_ecs_service.demo_ai.name
+}
+
+output "demo_ai_log_group_name" {
+  description = "CloudWatch Log Group for Demo AI task metadata"
+  value       = aws_cloudwatch_log_group.demo_ai.name
+}
+
+output "performance_target_url" {
+  description = "Private internal endpoint for PERF_TARGET_URL"
+  value       = "http://${aws_lb.performance_api.dns_name}/v1/chat/completions"
+}
+
+output "performance_target_model" {
+  description = "OpenAI-compatible model value for PERF_TARGET_MODEL"
+  value       = "demo-model"
+}
+
+output "performance_target_revision" {
+  description = "Immutable Demo AI image tag for performance-test traceability"
+  value       = var.demo_ai_image_tag
+}
+
 output "performance_results_bucket_name" {
   description = "Private S3 bucket for performance results"
   value       = aws_s3_bucket.performance_results.id
