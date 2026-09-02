@@ -1,9 +1,10 @@
 # Dedicated, disposable execution host for the backend performance runner.
-# The runner artifact is supplied independently through S3, so this host can
-# later be replaced by a container runner without changing the artifact format.
+# The host pulls a versioned Docker image from the private ECR repository.
 
 data "aws_ssm_parameter" "performance_runner_ami" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+  # ECS Optimized AL2023 includes Docker and avoids package downloads from a
+  # private subnet without NAT. The host uses Docker directly, not ECS.
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
 }
 
 resource "aws_iam_role" "performance_runner" {
@@ -37,6 +38,22 @@ resource "aws_iam_role_policy" "performance_runner" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "PullPerformanceRunnerImage"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
+        ]
+        Resource = aws_ecr_repository.performance_runner.arn
+      },
+      {
+        Sid      = "AuthorizeEcrPull"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
         Sid    = "ReadPerformanceQueueMetrics"
         Effect = "Allow"
         Action = ["sqs:GetQueueAttributes"]
@@ -56,12 +73,6 @@ resource "aws_iam_role_policy" "performance_runner" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = aws_db_instance.performance.master_user_secret[0].secret_arn
-      },
-      {
-        Sid      = "ReadRunnerBootstrapArtifact"
-        Effect   = "Allow"
-        Action   = ["s3:GetObject"]
-        Resource = "${aws_s3_bucket.performance_results.arn}/performance/bootstrap/*"
       },
       {
         Sid      = "WritePerformanceResults"
@@ -86,6 +97,13 @@ resource "aws_instance" "performance_runner" {
   vpc_security_group_ids      = [aws_security_group.performance_runner.id]
   iam_instance_profile        = aws_iam_instance_profile.performance_runner.name
   associate_public_ip_address = false
+
+  user_data = <<-USERDATA
+    #!/bin/bash
+    set -euo pipefail
+    systemctl enable --now docker
+    usermod -aG docker ec2-user || true
+  USERDATA
 
   dynamic "instance_market_options" {
     for_each = var.performance_runner_spot ? [1] : []
@@ -119,9 +137,9 @@ resource "aws_instance" "performance_runner" {
   depends_on = [aws_iam_role_policy_attachment.performance_runner_ssm]
 }
 
-# Invoke this document after a self-contained Runner artifact is published to
-# performance/bootstrap/runner.tar.gz. The artifact supplies Python 3.11+, k6,
-# psql, Java 21/Gradle, and backend runner code without requiring NAT access.
+# Invoke this document after an immutable Runner image is pushed to the
+# dedicated private ECR repository. The image supplies Python 3.11+, k6, psql,
+# Java 21/Gradle, and backend runner code without requiring NAT access.
 resource "aws_ssm_document" "performance_runner_bootstrap" {
   name            = "${var.project}-${var.environment}-performance-runner-bootstrap"
   document_type   = "Command"
@@ -129,25 +147,27 @@ resource "aws_ssm_document" "performance_runner_bootstrap" {
 
   content = yamlencode({
     schemaVersion = "2.2"
-    description   = "Install a versioned GuardBench performance runner artifact from private S3"
+    description   = "Pull and verify a versioned GuardBench performance runner image from private ECR"
     parameters = {
-      ArtifactKey = {
+      RunnerImage = {
         type        = "String"
-        default     = "performance/bootstrap/runner.tar.gz"
-        description = "S3 key for the self-contained performance runner artifact"
+        description = "Full immutable ECR image URI for the performance runner"
       }
     }
     mainSteps = [{
       action = "aws:runShellScript"
-      name   = "installPerformanceRunner"
+      name   = "preparePerformanceRunner"
       inputs = {
         runCommand = [
           "set -euo pipefail",
+          "runner_image='{{ RunnerImage }}'",
+          "case \"$runner_image\" in \"${aws_ecr_repository.performance_runner.repository_url}:\"*) ;; *) echo 'RunnerImage must use the dedicated performance-runner ECR repository.' >&2; exit 1 ;; esac",
+          "registry=\"$${runner_image%%/*}\"",
+          "aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin \"$registry\"",
+          "docker pull \"$runner_image\"",
+          "docker run --rm --entrypoint /workspace/bin/verify-runtime \"$runner_image\"",
           "install -d -m 0755 /opt/guardbench-performance-runner",
-          "aws s3 cp s3://${aws_s3_bucket.performance_results.id}/{{ ArtifactKey }} /tmp/guardbench-performance-runner.tar.gz",
-          "rm -rf /opt/guardbench-performance-runner/*",
-          "tar -xzf /tmp/guardbench-performance-runner.tar.gz -C /opt/guardbench-performance-runner",
-          "/opt/guardbench-performance-runner/bin/verify-runtime",
+          "printf '%s\\n' \"$runner_image\" > /opt/guardbench-performance-runner/image",
         ]
       }
     }]

@@ -38,3 +38,42 @@ resource "aws_ecr_lifecycle_policy" "app" {
     ]
   })
 }
+
+# Dedicated repository for the Dockerized performance runner. Keep it separate
+# from the application repository because both images use the backend commit
+# SHA as an immutable tag.
+resource "aws_ecr_repository" "performance_runner" {
+  name                 = "${var.project}-${var.environment}-performance-runner"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Name    = "${var.project}-${var.environment}-performance-runner-ecr"
+    Purpose = "performance-testing"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "performance_runner" {
+  repository = aws_ecr_repository.performance_runner.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep the last 10 performance runner images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}

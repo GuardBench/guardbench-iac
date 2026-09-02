@@ -126,12 +126,17 @@ output "performance_runner_security_group_id" {
 }
 
 output "performance_runner_bootstrap_document_name" {
-  description = "SSM Command document that installs a packaged performance runner from private S3"
+  description = "SSM Command document that pulls and verifies the performance runner Docker image"
   value       = aws_ssm_document.performance_runner_bootstrap.name
 }
 
+output "performance_runner_ecr_repository_url" {
+  description = "Private ECR repository URL for immutable performance runner images"
+  value       = aws_ecr_repository.performance_runner.repository_url
+}
+
 output "performance_results_bucket_name" {
-  description = "Private S3 bucket for runner bootstrap artifacts and performance results"
+  description = "Private S3 bucket for performance results"
   value       = aws_s3_bucket.performance_results.id
 }
 
