@@ -54,7 +54,7 @@ terraform apply
 
 ## SQS visibility와 claim lease
 
-Backend `dev`의 execution/resolution claim lease 기본값은 45초이며, HTTP target과 Bedrock provider 호출의 전체 timeout은 각각 15초다. 세 source queue(`gb-run-resolve`, `gb-workitems`, `gb-run-finalize`)는 동일한 shared ECS/SQS topology를 사용하므로 Terraform은 모두 `visibility_timeout_seconds = 90`으로 설정한다. 이 값은 claim lease와 DB phase·스케줄링·ack 처리 여유를 포함해 claim이 유효한 동안 정상 처리 중인 메시지가 다시 노출되지 않도록 한다.
+Backend `dev`의 execution/resolution claim lease 기본값은 45초이며, HTTP target과 Bedrock provider 호출의 전체 timeout은 각각 15초다. 세 source queue(`gb-run-resolve`, `gb-workitems`, `gb-run-finalize`)는 동일한 shared ECS/SQS topology를 사용하므로 Terraform은 모두 `visibility_timeout_seconds = 90`으로 설정한다. Worker가 `ReceiveMessage`마다 visibility를 명시하므로 Backend의 `guardbench.sqs.polling.visibility-timeout-seconds`도 90초여야 실제 메시지 visibility가 이 계약을 따른다. 따라서 Terraform apply만으로는 충분하지 않으며, Backend runtime companion PR [#159](https://github.com/GuardBench/guardbench-backend/pull/159)도 함께 반영해야 한다. 두 값은 claim lease와 DB phase·스케줄링·ack 처리 여유를 포함해 claim이 유효한 동안 정상 처리 중인 메시지가 다시 노출되지 않도록 한다.
 
 `maxReceiveCount = 5`는 반복되는 malformed message, application/DB 장애를 DLQ로 격리하기 위한 SQS redrive 기준이며 Provider retry budget이 아니다. Provider 호출 재시도는 Backend의 application-level attempt 정책이 소유한다. Performance-test 환경은 별도 queue를 사용하지 않으므로 이 timing 변경은 dev와 performance-test workload 모두에 적용된다.
 
