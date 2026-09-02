@@ -28,7 +28,9 @@ performance_db_max_allocated_storage   = 100
 performance_db_backup_retention_period = 0
 
 # Dedicated private EC2 Spot runner. It has no public IP or SSH ingress; use
-# SSM Session Manager for operational access.
+# SSM Session Manager for operational access. It is opt-in so a normal dev
+# apply does not create the performance-test host.
 performance_runner_instance_type  = "t3.medium"
 performance_runner_root_volume_gb = 20
 performance_runner_spot           = true
+performance_runner_enabled       = false

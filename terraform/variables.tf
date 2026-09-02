@@ -174,6 +174,12 @@ variable "performance_runner_instance_type" {
   default     = "t3.medium"
 }
 
+variable "performance_runner_enabled" {
+  description = "Create the dedicated performance-test runner EC2 instance"
+  type        = bool
+  default     = false
+}
+
 variable "performance_runner_root_volume_gb" {
   description = "gp3 root-volume size in GiB for the performance-test runner"
   type        = number

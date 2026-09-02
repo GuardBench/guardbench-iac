@@ -45,6 +45,8 @@ terraform apply
 
 기본값인 `ecs_db_target = "dev"`는 기존 dev RDS를 사용한다. 성능 테스트를 위해서는 `ecs_db_target = "performance"`으로 Terraform apply하여 JDBC endpoint와 Secrets Manager username/password가 모두 Performance RDS를 참조하는 baseline Task Definition을 등록한다. 이후 Backend issue #142가 적용된 Backend GitHub Actions deploy를 실행해 latest ACTIVE revision을 기반으로 ECS Service에 반영한다. Performance RDS의 instance class, storage, backup retention 변수에는 default가 없으므로 적용 전에 승인된 성능 계획 값을 모두 명시해야 한다. shared ECS task execution role에는 Dev와 Performance RDS의 두 master secret만 허용해, 전환 중 기존 revision 재시작 또는 circuit breaker rollback도 안전하게 지원한다. credential은 Terraform output이나 task definition plaintext에 노출하지 않는다.
 
+전용 Performance Runner EC2는 `performance_runner_enabled = false`가 기본값이며 일반적인 `dev` 배포에서는 생성하지 않는다. 성능 테스트를 실행할 때만 이 값을 `true`로 설정하고 Terraform apply를 수행한다. Spot runner는 `one-time` 요청이므로 테스트 종료 후 인스턴스를 삭제하거나 중단하면 다음 테스트 전에 다시 apply해야 한다.
+
 ## 프론트엔드 GitHub Actions OIDC 배포
 
 계정에 `token.actions.githubusercontent.com` OIDC provider가 이미 있는지 먼저 확인한다.
