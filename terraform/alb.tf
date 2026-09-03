@@ -13,6 +13,12 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = var.environment == "prod" ? true : false
 
+  access_logs {
+    bucket  = aws_s3_bucket.alb_access_logs.id
+    enabled = true
+    prefix  = "public"
+  }
+
   tags = {
     Name = "${var.project}-${var.environment}-alb"
   }

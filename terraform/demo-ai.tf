@@ -64,12 +64,25 @@ resource "aws_iam_role_policy" "demo_ai_task" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid      = "InvokeApprovedBedrockModels"
-      Effect   = "Allow"
-      Action   = ["bedrock:InvokeModel"]
-      Resource = var.demo_ai_bedrock_resource_arns
-    }]
+    Statement = [
+      {
+        Sid      = "InvokeApprovedBedrockModels"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = var.demo_ai_bedrock_resource_arns
+      },
+      {
+        Sid    = "EcsExecMessageChannels"
+        Effect = "Allow"
+        Action = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel",
+        ]
+        Resource = "*"
+      },
+    ]
   })
 }
 
@@ -115,11 +128,12 @@ resource "aws_ecs_task_definition" "demo_ai" {
 }
 
 resource "aws_ecs_service" "demo_ai" {
-  name            = "${var.project}-${var.environment}-demo-ai"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.demo_ai.arn
-  desired_count   = var.demo_ai_enabled ? var.demo_ai_desired_count : 0
-  launch_type     = "FARGATE"
+  name                   = "${var.project}-${var.environment}-demo-ai"
+  cluster                = aws_ecs_cluster.main.id
+  task_definition        = aws_ecs_task_definition.demo_ai.arn
+  desired_count          = var.demo_ai_enabled ? var.demo_ai_desired_count : 0
+  launch_type            = "FARGATE"
+  enable_execute_command = true
 
   network_configuration {
     subnets          = aws_subnet.private[*].id

@@ -11,6 +11,14 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
+# AWS CLI login cache (temporary credentials; never commit)
+.aws-login-cache/
+.aws-login-/
+
+# Local Terraform plan artifacts
+tfplan
+*.tfplan
+
 # IDE
 .idea/
 .vscode/

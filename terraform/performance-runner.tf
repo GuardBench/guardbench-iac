@@ -60,6 +60,8 @@ resource "aws_iam_role_policy" "performance_runner" {
         Resource = concat(
           [for queue in values(aws_sqs_queue.source) : queue.arn],
           [for queue in values(aws_sqs_queue.dead_letter) : queue.arn],
+          [for queue in values(aws_sqs_queue.performance_source) : queue.arn],
+          [for queue in values(aws_sqs_queue.performance_dead_letter) : queue.arn],
         )
       },
       {
