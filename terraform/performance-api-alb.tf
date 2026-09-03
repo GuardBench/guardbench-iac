@@ -22,6 +22,16 @@ resource "aws_security_group_rule" "performance_api_alb_ingress_from_runner" {
   security_group_id        = aws_security_group.performance_api_alb.id
 }
 
+resource "aws_security_group_rule" "performance_api_alb_ingress_from_api" {
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.api.id
+  description              = "Performance Backend target calls through the internal ALB"
+  security_group_id        = aws_security_group.performance_api_alb.id
+}
+
 resource "aws_security_group_rule" "performance_api_alb_egress_to_api" {
   type                     = "egress"
   from_port                = var.api_container_port
