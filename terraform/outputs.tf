@@ -275,3 +275,8 @@ output "vpc_endpoint_s3_id" {
   description = "S3 Gateway VPC endpoint ID"
   value       = aws_vpc_endpoint.s3.id
 }
+
+output "alb_access_logs_bucket_name" {
+  description = "Private S3 bucket for Public and Performance ALB access logs"
+  value       = aws_s3_bucket.alb_access_logs.id
+}

@@ -48,6 +48,12 @@ resource "aws_lb" "performance_api" {
   security_groups    = [aws_security_group.performance_api_alb.id]
   subnets            = aws_subnet.private[*].id
 
+
+  access_logs {
+    bucket  = aws_s3_bucket.alb_access_logs.id
+    enabled = true
+    prefix  = "performance"
+  }
   tags = {
     Name    = "${var.project}-${var.environment}-performance-api"
     Purpose = "performance-testing"

@@ -108,6 +108,16 @@ resource "aws_iam_role_policy" "app_task" {
         ]
         Resource = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:guardrail/*"
       },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel",
+        ]
+        Resource = "*"
+      },
     ]
   })
 }
@@ -167,11 +177,13 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
-  name            = "${var.project}-${var.environment}-app"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = var.app_desired_count
-  launch_type     = "FARGATE"
+  name                              = "${var.project}-${var.environment}-app"
+  cluster                           = aws_ecs_cluster.main.id
+  task_definition                   = aws_ecs_task_definition.app.arn
+  desired_count                     = var.app_desired_count
+  launch_type                       = "FARGATE"
+  health_check_grace_period_seconds = 120
+  enable_execute_command            = true
 
   # GitHub Actions owns application task-definition revisions after the
   # initial service creation. Terraform continues to own the service shape
