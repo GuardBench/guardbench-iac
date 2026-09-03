@@ -166,7 +166,7 @@ output "performance_runner_security_group_id" {
 }
 
 output "performance_runner_bootstrap_document_name" {
-  description = "SSM Command document that pulls and verifies the performance runner Docker image"
+  description = "SSM Command document that preflights the internal Performance API and verifies the runner Docker image"
   value       = aws_ssm_document.performance_runner_bootstrap.name
 }
 

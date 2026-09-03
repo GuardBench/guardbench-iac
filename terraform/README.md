@@ -162,6 +162,17 @@ aws ecr get-login-password --region ap-northeast-2 \
 
 Runner EC2는 ECS Optimized AL2023 AMI를 사용하므로 private subnet에서 별도 Docker 패키지 다운로드가 필요 없다. Terraform apply 후 SSM Command document를 `RunnerImage=$runner_repository:$runner_revision` 파라미터로 실행하면 ECR pull과 image `verify-runtime` 검증이 수행된다. 실제 Runner 실행에 필요한 `PERF_*` 환경변수와 profile/dataset은 Backend 성능테스트 문서의 실행 절차를 따른다.
 
+SSM bootstrap은 실제 성능 실행 전에 Runner host에서 Performance internal ALB의 `/health`와 `/api/v1/test-suites?page=1&size=1`을 확인한다. 따라서 `PERF_BASE_URL`에는 public ALB 주소를 사용하지 말고 다음 Terraform output을 사용한다.
+
+```bash
+export PERF_BASE_URL="$(terraform output -raw performance_runner_api_url)"
+export PERF_TARGET_URL="$(terraform output -raw performance_target_url)"
+export PERF_TARGET_MODEL="$(terraform output -raw performance_target_model)"
+export PERF_TARGET_REVISION="$(terraform output -raw performance_target_revision)"
+```
+
+Bootstrap은 image 안의 `/workspace/bin` script에 CRLF가 포함되어 있으면 `verify-runtime` 실행 전에 중단하고 문제 파일과 재빌드 방향을 출력한다. CRLF 오류가 발생하면 Backend Runner image를 LF checkout 환경에서 다시 build/publish하고, 배포할 image tag가 실제 image digest와 일치하는지 확인해야 한다. 현재 Performance API의 canonical health endpoint는 `/health`이며, health check가 404이면 성능 workload를 시작하지 않고 Backend image의 endpoint mapping과 image digest를 먼저 확인한다.
+
 ## 프론트엔드 GitHub Actions OIDC 배포
 
 계정에 `token.actions.githubusercontent.com` OIDC provider가 이미 있는지 먼저 확인한다.
