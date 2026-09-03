@@ -162,11 +162,16 @@ resource "aws_ssm_document" "performance_runner_bootstrap" {
       inputs = {
         runCommand = [
           "set -euo pipefail",
+          "performance_base_url='http://${aws_lb.performance_api.dns_name}'",
+          "curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \"$performance_base_url/health\" >/dev/null",
+          "curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \"$performance_base_url/api/v1/test-suites?page=1&size=1\" >/dev/null",
           "runner_image='{{ RunnerImage }}'",
           "case \"$runner_image\" in \"${aws_ecr_repository.performance_runner.repository_url}:\"*) ;; *) echo 'RunnerImage must use the dedicated performance-runner ECR repository.' >&2; exit 1 ;; esac",
           "registry=\"$${runner_image%%/*}\"",
           "aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin \"$registry\"",
           "docker pull \"$runner_image\"",
+          "crlf_files=\"$(docker run --rm --entrypoint python3.11 \"$runner_image\" -c 'from pathlib import Path; print(\"\\n\".join(str(path) for path in Path(\"/workspace/bin\").rglob(\"*\") if path.is_file() and b\"\\r\\n\" in path.read_bytes()))')\"",
+          "if [ -n \"$crlf_files\" ]; then echo \"Runner image contains CRLF scripts: $crlf_files\" >&2; echo 'Rebuild and republish the image from an LF-preserving checkout.' >&2; exit 1; fi",
           "docker run --rm --entrypoint /workspace/bin/verify-runtime \"$runner_image\"",
           "install -d -m 0755 /opt/guardbench-performance-runner",
           "printf '%s\\n' \"$runner_image\" > /opt/guardbench-performance-runner/image",

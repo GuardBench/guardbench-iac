@@ -1,6 +1,14 @@
 data "aws_caller_identity" "current" {}
 
 locals {
+  # Keep all backend service capacity inputs in one map. The app service is
+  # currently the combined API/worker service; api and worker can be consumed
+  # by their respective resources when the backend is split.
+  backend_service_desired_counts = merge(
+    { app = 1 },
+    var.backend_service_desired_counts,
+  )
+
   backend_container_base = {
     name      = "app"
     image     = "${aws_ecr_repository.app.repository_url}:${var.app_image_tag}"
@@ -48,6 +56,13 @@ locals {
       { name = "GUARDBENCH_SQS_QUEUE_URLS_RESOLVE", value = aws_sqs_queue.performance_source["gb-run-resolve"].url },
       { name = "GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS", value = aws_sqs_queue.performance_source["gb-workitems"].url },
       { name = "GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE", value = aws_sqs_queue.performance_source["gb-run-finalize"].url },
+      {
+        name = "SPRING_APPLICATION_JSON"
+        value = jsonencode({
+          "guardbench.http-endpoint.allow-private-addresses"   = false
+          "guardbench.http-endpoint.allowed-private-hostnames" = [aws_lb.performance_api.dns_name]
+        })
+      },
     ])
     secrets = [
       { name = "SPRING_DATASOURCE_USERNAME", valueFrom = "${aws_db_instance.performance.master_user_secret[0].secret_arn}:username::" },
@@ -228,7 +243,7 @@ resource "aws_ecs_service" "app" {
   name                              = "${var.project}-${var.environment}-app"
   cluster                           = aws_ecs_cluster.main.id
   task_definition                   = aws_ecs_task_definition.app.arn
-  desired_count                     = var.app_desired_count
+  desired_count                     = local.backend_service_desired_counts["app"]
   launch_type                       = "FARGATE"
   health_check_grace_period_seconds = 120
   enable_execute_command            = true

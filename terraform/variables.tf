@@ -79,10 +79,18 @@ variable "api_memory" {
   default     = 1024
 }
 
-variable "app_desired_count" {
-  description = "Number of development application tasks"
-  type        = number
-  default     = 1
+variable "backend_service_desired_counts" {
+  description = "Desired task counts keyed by backend ECS service role; app is the current combined service and api/worker are available for the future split"
+  type        = map(number)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for desired_count in values(var.backend_service_desired_counts) :
+      desired_count >= 0 && desired_count == floor(desired_count)
+    ])
+    error_message = "backend_service_desired_counts values must be non-negative whole numbers."
+  }
 }
 
 variable "performance_app_enabled" {

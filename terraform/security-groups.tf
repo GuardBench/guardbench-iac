@@ -320,8 +320,8 @@ resource "aws_security_group" "vpc_endpoints" {
   description = "GuardBench VPC Endpoints - allow HTTPS from private subnets"
   vpc_id      = aws_vpc.main.id
 
-  # Existing state owns this inline ingress. Allow the combined app service
-  # and the dedicated performance runner, but not the legacy worker group.
+  # Existing state owns this inline ingress. Allow the private application
+  # services, the dedicated performance runner, and the RDS access host.
   ingress {
     description = "HTTPS from the combined app service"
     from_port   = 443
@@ -331,6 +331,7 @@ resource "aws_security_group" "vpc_endpoints" {
       aws_security_group.api.id,
       aws_security_group.performance_runner.id,
       aws_security_group.demo_ai.id,
+      aws_security_group.db_access.id,
     ]
   }
 
