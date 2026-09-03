@@ -41,12 +41,14 @@ demo_ai_bedrock_resource_arns = [
   "arn:aws:bedrock:ap-southeast-1::foundation-model/amazon.nova-micro-v1:0",
   "arn:aws:bedrock:ap-northeast-3::foundation-model/amazon.nova-micro-v1:0",
 ]
-demo_ai_enabled       = false
+# Demo AI runs as a separate ECS service in the dev cluster and is available
+# through the internal performance ALB. Keep it enabled for normal dev use.
+demo_ai_enabled       = true
 demo_ai_desired_count = 1
 
-# The shared dev ECS task can target either the normal dev RDS or the isolated
-# performance-test RDS. Keep dev as the normal deployment default.
-ecs_db_target = "dev"
+# Dedicated Performance Backend service. Enable this for a concurrent run.
+performance_app_enabled       = false
+performance_app_desired_count = 1
 
 # Performance RDS (isolated destructive-reset target for performance tests)
 performance_db_instance_class          = "db.m7g.large"
@@ -61,3 +63,7 @@ performance_runner_instance_type  = "t3.medium"
 performance_runner_root_volume_gb = 20
 performance_runner_spot           = true
 performance_runner_enabled       = false
+
+# Private SSM host for local psql/DBeaver port forwarding to both RDS instances.
+db_access_host_enabled       = true
+db_access_host_instance_type = "t3.micro"

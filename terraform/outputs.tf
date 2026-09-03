@@ -96,8 +96,23 @@ output "performance_runner_api_url" {
 }
 
 output "ecs_service_name" {
-  description = "Combined application ECS service name for performance-run automation"
+  description = "Development application ECS service name"
   value       = aws_ecs_service.app.name
+}
+
+output "ecs_task_definition_arn" {
+  description = "Development application Terraform-managed baseline task definition ARN"
+  value       = aws_ecs_task_definition.app.arn
+}
+
+output "performance_ecs_service_name" {
+  description = "Dedicated performance application ECS service name"
+  value       = aws_ecs_service.performance_app.name
+}
+
+output "performance_ecs_task_definition_family" {
+  description = "Dedicated performance application ECS task definition family"
+  value       = aws_ecs_task_definition.performance_app.family
 }
 
 output "ecr_repository_url" {
@@ -106,8 +121,13 @@ output "ecr_repository_url" {
 }
 
 output "rds_endpoint" {
-  description = "Private PostgreSQL endpoint for the combined app service"
+  description = "Private PostgreSQL endpoint for the development app service"
   value       = aws_db_instance.app.address
+}
+
+output "rds_master_secret_arn" {
+  description = "Secrets Manager ARN for the development RDS credentials"
+  value       = aws_db_instance.app.master_user_secret[0].secret_arn
 }
 
 output "performance_rds_endpoint" {
@@ -123,6 +143,16 @@ output "performance_rds_identifier" {
 output "performance_rds_master_secret_arn" {
   description = "Secrets Manager ARN for the isolated performance RDS credentials"
   value       = aws_db_instance.performance.master_user_secret[0].secret_arn
+}
+
+output "db_access_host_instance_id" {
+  description = "Private SSM-managed EC2 instance ID for RDS port forwarding"
+  value       = var.db_access_host_enabled ? aws_instance.db_access[0].id : null
+}
+
+output "db_access_host_private_ip" {
+  description = "Private IP of the SSM-managed RDS access host"
+  value       = var.db_access_host_enabled ? aws_instance.db_access[0].private_ip : null
 }
 
 output "performance_runner_instance_id" {
@@ -181,23 +211,43 @@ output "performance_results_bucket_name" {
 }
 
 output "sqs_queue_urls" {
-  description = "Source queue URLs injected into the app task definition"
+  description = "Development source queue URLs injected into the app task definition"
   value       = { for name, queue in aws_sqs_queue.source : name => queue.url }
 }
 
 output "sqs_queue_names" {
-  description = "Source queue names used by performance-run automation"
+  description = "Development source queue names"
   value       = { for name, queue in aws_sqs_queue.source : name => queue.name }
 }
 
 output "sqs_dead_letter_queue_urls" {
-  description = "Dead-letter queue URLs used by performance-run automation"
+  description = "Development dead-letter queue URLs"
   value       = { for name, queue in aws_sqs_queue.dead_letter : name => queue.url }
 }
 
 output "sqs_dead_letter_queue_names" {
-  description = "Dead-letter queue names used by performance-run automation"
+  description = "Development dead-letter queue names"
   value       = { for name, queue in aws_sqs_queue.dead_letter : name => queue.name }
+}
+
+output "performance_sqs_queue_urls" {
+  description = "Performance source queue URLs injected into the performance app task definition"
+  value       = { for name, queue in aws_sqs_queue.performance_source : name => queue.url }
+}
+
+output "performance_sqs_queue_names" {
+  description = "Performance source queue names"
+  value       = { for name, queue in aws_sqs_queue.performance_source : name => queue.name }
+}
+
+output "performance_sqs_dead_letter_queue_urls" {
+  description = "Performance dead-letter queue URLs"
+  value       = { for name, queue in aws_sqs_queue.performance_dead_letter : name => queue.url }
+}
+
+output "performance_sqs_dead_letter_queue_names" {
+  description = "Performance dead-letter queue names"
+  value       = { for name, queue in aws_sqs_queue.performance_dead_letter : name => queue.name }
 }
 
 output "ops_sns_topic_arn" {
@@ -231,6 +281,11 @@ output "rds_security_group_id" {
 output "performance_rds_security_group_id" {
   description = "Security group ID for the performance-test RDS"
   value       = aws_security_group.performance_rds.id
+}
+
+output "db_access_security_group_id" {
+  description = "Security group ID for the private SSM RDS access host"
+  value       = aws_security_group.db_access.id
 }
 
 output "vpc_endpoints_security_group_id" {
@@ -274,4 +329,9 @@ output "vpc_endpoint_ecr_api_id" {
 output "vpc_endpoint_s3_id" {
   description = "S3 Gateway VPC endpoint ID"
   value       = aws_vpc_endpoint.s3.id
+}
+
+output "alb_access_logs_bucket_name" {
+  description = "Private S3 bucket for Public and Performance ALB access logs"
+  value       = aws_s3_bucket.alb_access_logs.id
 }
