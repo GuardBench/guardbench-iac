@@ -80,9 +80,26 @@ variable "api_memory" {
 }
 
 variable "app_desired_count" {
-  description = "Number of combined application tasks"
+  description = "Number of development application tasks"
   type        = number
   default     = 1
+}
+
+variable "performance_app_enabled" {
+  description = "Create running Performance Backend tasks alongside the development service"
+  type        = bool
+  default     = false
+}
+
+variable "performance_app_desired_count" {
+  description = "Number of Performance Backend tasks when the service is enabled"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.performance_app_desired_count >= 0
+    error_message = "performance_app_desired_count must be zero or greater."
+  }
 }
 
 variable "app_image_tag" {
@@ -172,8 +189,20 @@ variable "db_port" {
   default     = 5432
 }
 
+variable "db_access_host_enabled" {
+  description = "Create the private SSM-managed host used for RDS port forwarding"
+  type        = bool
+  default     = true
+}
+
+variable "db_access_host_instance_type" {
+  description = "EC2 instance type for the private RDS access host"
+  type        = string
+  default     = "t3.micro"
+}
+
 variable "ecs_db_target" {
-  description = "Database target injected into the shared dev ECS task definition"
+  description = "Deprecated compatibility input; backend services no longer use a shared DB target switch"
   type        = string
   default     = "dev"
 

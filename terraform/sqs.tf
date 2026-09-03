@@ -14,8 +14,6 @@ locals {
   processing_buffer_seconds  = 15
   visibility_timeout_seconds = 90
 
-  selected_source_queues      = var.ecs_db_target == "performance" ? aws_sqs_queue.performance_source : aws_sqs_queue.source
-  selected_dead_letter_queues = var.ecs_db_target == "performance" ? aws_sqs_queue.performance_dead_letter : aws_sqs_queue.dead_letter
 }
 
 check "sqs_visibility_timeout_contract" {

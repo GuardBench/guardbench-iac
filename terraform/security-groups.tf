@@ -187,7 +187,7 @@ resource "aws_security_group_rule" "performance_rds_ingress_from_api" {
   to_port                  = var.db_port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.api.id
-  description              = "From shared dev API service"
+  description              = "From Backend ECS services"
   security_group_id        = aws_security_group.performance_rds.id
 }
 

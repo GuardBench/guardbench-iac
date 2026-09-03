@@ -1,15 +1,67 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  selected_db = var.ecs_db_target == "performance" ? {
-    address           = aws_db_instance.performance.address
-    master_secret_arn = aws_db_instance.performance.master_user_secret[0].secret_arn
-    database_name     = "guardbench_perf"
-    } : {
-    address           = aws_db_instance.app.address
-    master_secret_arn = aws_db_instance.app.master_user_secret[0].secret_arn
-    database_name     = "guardbench"
+  backend_container_base = {
+    name      = "app"
+    image     = "${aws_ecr_repository.app.repository_url}:${var.app_image_tag}"
+    essential = true
+
+    portMappings = [{
+      containerPort = var.api_container_port
+      protocol      = "tcp"
+    }]
   }
+
+  backend_common_environment = [
+    { name = "SERVER_PORT", value = tostring(var.api_container_port) },
+    { name = "SPRING_DOCKER_COMPOSE_ENABLED", value = "false" },
+    { name = "AWS_REGION", value = var.aws_region },
+    { name = "SQS_ENABLED", value = "true" },
+    { name = "WORKER_ENABLED", value = "true" },
+    { name = "SPRING_TASK_SCHEDULING_POOL_SIZE", value = "4" },
+  ]
+
+  backend_dev_container = merge(local.backend_container_base, {
+    environment = concat(local.backend_common_environment, [
+      { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://${aws_db_instance.app.address}:${var.db_port}/guardbench?sslmode=require" },
+      { name = "GUARDBENCH_SQS_QUEUE_URLS_RESOLVE", value = aws_sqs_queue.source["gb-run-resolve"].url },
+      { name = "GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS", value = aws_sqs_queue.source["gb-workitems"].url },
+      { name = "GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE", value = aws_sqs_queue.source["gb-run-finalize"].url },
+    ])
+    secrets = [
+      { name = "SPRING_DATASOURCE_USERNAME", valueFrom = "${aws_db_instance.app.master_user_secret[0].secret_arn}:username::" },
+      { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${aws_db_instance.app.master_user_secret[0].secret_arn}:password::" },
+    ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.app.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "app"
+      }
+    }
+  })
+
+  backend_performance_container = merge(local.backend_container_base, {
+    environment = concat(local.backend_common_environment, [
+      { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://${aws_db_instance.performance.address}:${var.db_port}/guardbench_perf?sslmode=require" },
+      { name = "GUARDBENCH_SQS_QUEUE_URLS_RESOLVE", value = aws_sqs_queue.performance_source["gb-run-resolve"].url },
+      { name = "GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS", value = aws_sqs_queue.performance_source["gb-workitems"].url },
+      { name = "GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE", value = aws_sqs_queue.performance_source["gb-run-finalize"].url },
+    ])
+    secrets = [
+      { name = "SPRING_DATASOURCE_USERNAME", valueFrom = "${aws_db_instance.performance.master_user_secret[0].secret_arn}:username::" },
+      { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${aws_db_instance.performance.master_user_secret[0].secret_arn}:password::" },
+    ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.performance_app.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "performance-app"
+      }
+    }
+  })
 }
 
 resource "aws_ecs_cluster" "main" {
@@ -28,6 +80,16 @@ resource "aws_ecs_cluster" "main" {
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.project}-${var.environment}/app"
   retention_in_days = 14
+}
+
+resource "aws_cloudwatch_log_group" "performance_app" {
+  name              = "/ecs/${var.project}-${var.environment}/performance-app"
+  retention_in_days = 14
+
+  tags = {
+    Name    = "/ecs/${var.project}-${var.environment}/performance-app"
+    Purpose = "performance-testing"
+  }
 }
 
 resource "aws_iam_role" "ecs_task_execution" {
@@ -57,9 +119,8 @@ resource "aws_iam_role_policy" "ecs_exec_secrets" {
     Statement = [{
       Effect = "Allow"
       Action = ["secretsmanager:GetSecretValue"]
-      # The service and circuit breaker can still start a task from either
-      # Task Definition revision while a DB target switch is being deployed.
-      # Keep both intended RDS secrets available to the shared execution role.
+      # Dev and performance services use separate task definitions but share
+      # the execution role. Keep both intended RDS secrets available.
       Resource = [
         aws_db_instance.app.master_user_secret[0].secret_arn,
         aws_db_instance.performance.master_user_secret[0].secret_arn,
@@ -137,43 +198,30 @@ resource "aws_ecs_task_definition" "app" {
   execution_role_arn = aws_iam_role.ecs_task_execution.arn
   task_role_arn      = aws_iam_role.app_task.arn
 
-  container_definitions = jsonencode([{
-    name      = "app"
-    image     = "${aws_ecr_repository.app.repository_url}:${var.app_image_tag}"
-    essential = true
+  container_definitions = jsonencode([local.backend_dev_container])
+}
 
-    portMappings = [{
-      containerPort = var.api_container_port
-      protocol      = "tcp"
-    }]
+resource "aws_ecs_task_definition" "performance_app" {
+  family                   = "${var.project}-${var.environment}-performance-app"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.api_cpu
+  memory                   = var.api_memory
 
-    environment = [
-      { name = "SERVER_PORT", value = tostring(var.api_container_port) },
-      { name = "SPRING_DOCKER_COMPOSE_ENABLED", value = "false" },
-      { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://${local.selected_db.address}:${var.db_port}/${local.selected_db.database_name}?sslmode=require" },
-      { name = "AWS_REGION", value = var.aws_region },
-      { name = "SQS_ENABLED", value = "true" },
-      { name = "WORKER_ENABLED", value = "true" },
-      { name = "SPRING_TASK_SCHEDULING_POOL_SIZE", value = "4" },
-      { name = "GUARDBENCH_SQS_QUEUE_URLS_RESOLVE", value = local.selected_source_queues["gb-run-resolve"].url },
-      { name = "GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS", value = local.selected_source_queues["gb-workitems"].url },
-      { name = "GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE", value = local.selected_source_queues["gb-run-finalize"].url },
-    ]
+  runtime_platform {
+    cpu_architecture        = "X86_64"
+    operating_system_family = "LINUX"
+  }
 
-    secrets = [
-      { name = "SPRING_DATASOURCE_USERNAME", valueFrom = "${local.selected_db.master_secret_arn}:username::" },
-      { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = "${local.selected_db.master_secret_arn}:password::" },
-    ]
+  execution_role_arn = aws_iam_role.ecs_task_execution.arn
+  task_role_arn      = aws_iam_role.app_task.arn
 
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        "awslogs-group"         = aws_cloudwatch_log_group.app.name
-        "awslogs-region"        = var.aws_region
-        "awslogs-stream-prefix" = "app"
-      }
-    }
-  }])
+  container_definitions = jsonencode([local.backend_performance_container])
+
+  tags = {
+    Name    = "${var.project}-${var.environment}-performance-app"
+    Purpose = "performance-testing"
+  }
 }
 
 resource "aws_ecs_service" "app" {
@@ -185,7 +233,7 @@ resource "aws_ecs_service" "app" {
   health_check_grace_period_seconds = 120
   enable_execute_command            = true
 
-  # GitHub Actions owns application task-definition revisions after the
+  # GitHub Actions owns dev application task-definition revisions after the
   # initial service creation. Terraform continues to own the service shape
   # but must not roll the service back to its baseline revision.
   lifecycle {
@@ -204,6 +252,32 @@ resource "aws_ecs_service" "app" {
     container_port   = var.api_container_port
   }
 
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  depends_on = [aws_lb_listener.http]
+}
+
+resource "aws_ecs_service" "performance_app" {
+  name                              = "${var.project}-${var.environment}-performance-app"
+  cluster                           = aws_ecs_cluster.main.id
+  task_definition                   = aws_ecs_task_definition.performance_app.arn
+  desired_count                     = var.performance_app_enabled ? var.performance_app_desired_count : 0
+  launch_type                       = "FARGATE"
+  health_check_grace_period_seconds = 120
+  enable_execute_command            = true
+
+  network_configuration {
+    subnets          = aws_subnet.private[*].id
+    security_groups  = [aws_security_group.api.id]
+    assign_public_ip = false
+  }
+
   load_balancer {
     target_group_arn = aws_lb_target_group.performance_api.arn
     container_name   = "app"
@@ -218,5 +292,7 @@ resource "aws_ecs_service" "app" {
     rollback = true
   }
 
-  depends_on = [aws_lb_listener.http, aws_lb_listener.performance_api]
+  # The existing shared service must detach from this target group before the
+  # dedicated performance service registers its own tasks.
+  depends_on = [aws_ecs_service.app, aws_lb_listener.performance_api]
 }
