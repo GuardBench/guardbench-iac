@@ -56,6 +56,13 @@ locals {
       { name = "GUARDBENCH_SQS_QUEUE_URLS_RESOLVE", value = aws_sqs_queue.performance_source["gb-run-resolve"].url },
       { name = "GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS", value = aws_sqs_queue.performance_source["gb-workitems"].url },
       { name = "GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE", value = aws_sqs_queue.performance_source["gb-run-finalize"].url },
+      {
+        name = "SPRING_APPLICATION_JSON"
+        value = jsonencode({
+          "guardbench.http-endpoint.allow-private-addresses"   = false
+          "guardbench.http-endpoint.allowed-private-hostnames" = [aws_lb.performance_api.dns_name]
+        })
+      },
     ])
     secrets = [
       { name = "SPRING_DATASOURCE_USERNAME", valueFrom = "${aws_db_instance.performance.master_user_secret[0].secret_arn}:username::" },
