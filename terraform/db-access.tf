@@ -11,7 +11,14 @@ resource "aws_security_group" "db_access" {
   description = "SSM-only private host for RDS port forwarding"
   vpc_id      = aws_vpc.main.id
   ingress     = []
-  egress      = []
+
+  # Egress is managed by the dedicated aws_security_group_rule resources below.
+  # Ignore the provider's default egress representation to avoid mixing inline
+  # and standalone ownership during refresh.
+  egress = []
+  lifecycle {
+    ignore_changes = [egress]
+  }
 
   tags = {
     Name    = "${var.project}-${var.environment}-db-access-sg"
@@ -67,16 +74,6 @@ resource "aws_security_group_rule" "performance_rds_ingress_from_db_access" {
   source_security_group_id = aws_security_group.db_access.id
   description              = "Developer access through SSM port forwarding"
   security_group_id        = aws_security_group.performance_rds.id
-}
-
-resource "aws_security_group_rule" "vpc_endpoints_ingress_from_db_access" {
-  type                     = "ingress"
-  from_port                = 443
-  to_port                  = 443
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.db_access.id
-  description              = "SSM access host HTTPS"
-  security_group_id        = aws_security_group.vpc_endpoints.id
 }
 
 resource "aws_iam_role" "db_access" {
@@ -141,6 +138,5 @@ resource "aws_instance" "db_access" {
   depends_on = [
     aws_iam_role_policy_attachment.db_access_ssm,
     aws_security_group_rule.db_access_egress_to_vpc_endpoints,
-    aws_security_group_rule.vpc_endpoints_ingress_from_db_access,
   ]
 }
