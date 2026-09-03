@@ -95,7 +95,10 @@ resource "aws_iam_role_policy" "app_task" {
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
         ]
-        Resource = values(aws_sqs_queue.source)[*].arn
+        Resource = concat(
+          [for queue in values(aws_sqs_queue.source) : queue.arn],
+          [for queue in values(aws_sqs_queue.performance_source) : queue.arn],
+        )
       },
       {
         Effect = "Allow"
@@ -142,9 +145,9 @@ resource "aws_ecs_task_definition" "app" {
       { name = "SQS_ENABLED", value = "true" },
       { name = "WORKER_ENABLED", value = "true" },
       { name = "SPRING_TASK_SCHEDULING_POOL_SIZE", value = "4" },
-      { name = "GUARDBENCH_SQS_QUEUE_URLS_RESOLVE", value = aws_sqs_queue.source["gb-run-resolve"].url },
-      { name = "GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS", value = aws_sqs_queue.source["gb-workitems"].url },
-      { name = "GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE", value = aws_sqs_queue.source["gb-run-finalize"].url },
+      { name = "GUARDBENCH_SQS_QUEUE_URLS_RESOLVE", value = local.selected_source_queues["gb-run-resolve"].url },
+      { name = "GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS", value = local.selected_source_queues["gb-workitems"].url },
+      { name = "GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE", value = local.selected_source_queues["gb-run-finalize"].url },
     ]
 
     secrets = [

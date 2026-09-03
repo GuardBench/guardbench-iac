@@ -182,22 +182,22 @@ output "performance_results_bucket_name" {
 
 output "sqs_queue_urls" {
   description = "Source queue URLs injected into the app task definition"
-  value       = { for name, queue in aws_sqs_queue.source : name => queue.url }
+  value       = { for name, queue in local.selected_source_queues : name => queue.url }
 }
 
 output "sqs_queue_names" {
   description = "Source queue names used by performance-run automation"
-  value       = { for name, queue in aws_sqs_queue.source : name => queue.name }
+  value       = { for name, queue in local.selected_source_queues : name => queue.name }
 }
 
 output "sqs_dead_letter_queue_urls" {
   description = "Dead-letter queue URLs used by performance-run automation"
-  value       = { for name, queue in aws_sqs_queue.dead_letter : name => queue.url }
+  value       = { for name, queue in local.selected_dead_letter_queues : name => queue.url }
 }
 
 output "sqs_dead_letter_queue_names" {
   description = "Dead-letter queue names used by performance-run automation"
-  value       = { for name, queue in aws_sqs_queue.dead_letter : name => queue.name }
+  value       = { for name, queue in local.selected_dead_letter_queues : name => queue.name }
 }
 
 output "ops_sns_topic_arn" {
