@@ -32,11 +32,13 @@ demo_ai_bedrock_resource_arns = [
   "arn:aws:bedrock:ap-southeast-1::foundation-model/amazon.nova-micro-v1:0",
   "arn:aws:bedrock:ap-northeast-3::foundation-model/amazon.nova-micro-v1:0",
 ]
-demo_ai_enabled       = false
+# Demo AI runs as a separate ECS service in the dev cluster and is available
+# through the internal performance ALB. Keep it enabled for normal dev use.
+demo_ai_enabled       = true
 demo_ai_desired_count = 1
 
-# The shared dev ECS task can target either the normal dev RDS or the isolated
-# performance-test RDS. Keep dev as the normal deployment default.
+# The shared backend ECS task currently targets one DB/queue profile at a time.
+# Keep dev as the normal deployment default; performance is a temporary switch.
 ecs_db_target = "dev"
 
 # Performance RDS (isolated destructive-reset target for performance tests)
