@@ -311,6 +311,21 @@ output "vpc_endpoint_bedrock_id" {
   value       = aws_vpc_endpoint.bedrock.id
 }
 
+output "vpc_endpoint_sagemaker_runtime_id" {
+  description = "SageMaker Runtime VPC interface endpoint ID used by private ECS tasks"
+  value       = aws_vpc_endpoint.sagemaker_runtime.id
+}
+
+output "sagemaker_classifier_endpoint_name" {
+  description = "Exact SageMaker endpoint name injected into the backend task definition"
+  value       = aws_sagemaker_endpoint.classifier.name
+}
+
+output "sagemaker_classifier_endpoint_arn" {
+  description = "Exact endpoint ARN permitted to the backend ECS task role"
+  value       = aws_sagemaker_endpoint.classifier.arn
+}
+
 output "vpc_endpoint_ssm_id" {
   description = "SSM VPC endpoint ID"
   value       = aws_vpc_endpoint.ssm.id

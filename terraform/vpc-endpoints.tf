@@ -48,6 +48,21 @@ resource "aws_vpc_endpoint" "bedrock" {
   }
 }
 
+# ECS tasks call the classifier through PrivateLink.  private_dns_enabled
+# resolves the standard SageMaker Runtime hostname to this interface endpoint.
+resource "aws_vpc_endpoint" "sagemaker_runtime" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.sagemaker.runtime"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "${var.project}-${var.environment}-vpce-sagemaker-runtime"
+  }
+}
+
 # SSM Parameter Store - DB 자격증명, API 키 조회
 resource "aws_vpc_endpoint" "ssm" {
   vpc_id              = aws_vpc.main.id

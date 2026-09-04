@@ -24,6 +24,9 @@ locals {
     { name = "SERVER_PORT", value = tostring(var.api_container_port) },
     { name = "SPRING_DOCKER_COMPOSE_ENABLED", value = "false" },
     { name = "AWS_REGION", value = var.aws_region },
+    { name = "SAGEMAKER_CLASSIFIER_ENDPOINT_NAME", value = aws_sagemaker_endpoint.classifier.name },
+    { name = "SAGEMAKER_CLASSIFIER_SYSTEM_PROMPT", value = var.sagemaker_classifier_system_prompt },
+    { name = "SAGEMAKER_CLASSIFIER_USER_PROMPT_TEMPLATE", value = var.sagemaker_classifier_user_prompt_template },
     { name = "SQS_ENABLED", value = "true" },
     { name = "WORKER_ENABLED", value = "true" },
     { name = "SPRING_TASK_SCHEDULING_POOL_SIZE", value = "4" },
@@ -35,6 +38,13 @@ locals {
       { name = "GUARDBENCH_SQS_QUEUE_URLS_RESOLVE", value = aws_sqs_queue.source["gb-run-resolve"].url },
       { name = "GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS", value = aws_sqs_queue.source["gb-workitems"].url },
       { name = "GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE", value = aws_sqs_queue.source["gb-run-finalize"].url },
+      {
+        name = "SPRING_APPLICATION_JSON"
+        value = jsonencode({
+          "guardbench.http-endpoint.allow-private-addresses"   = false
+          "guardbench.http-endpoint.allowed-private-hostnames" = [aws_lb.performance_api.dns_name]
+        })
+      },
     ])
     secrets = [
       { name = "SPRING_DATASOURCE_USERNAME", valueFrom = "${aws_db_instance.app.master_user_secret[0].secret_arn}:username::" },
@@ -164,6 +174,12 @@ resource "aws_iam_role_policy" "app_task" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      {
+        Sid      = "InvokeClassifierEndpointOnly"
+        Effect   = "Allow"
+        Action   = ["sagemaker:InvokeEndpoint"]
+        Resource = aws_sagemaker_endpoint.classifier.arn
+      },
       {
         Effect = "Allow"
         Action = [
