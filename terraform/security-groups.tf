@@ -109,6 +109,16 @@ resource "aws_security_group_rule" "api_egress_to_performance_rds" {
   security_group_id        = aws_security_group.api.id
 }
 
+resource "aws_security_group_rule" "api_egress_to_performance_alb" {
+  type                     = "egress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.performance_api_alb.id
+  description              = "Performance Backend target calls through the internal ALB"
+  security_group_id        = aws_security_group.api.id
+}
+
 # ============================================
 # Worker Security Group (Orchestrator + Executor)
 # ============================================
