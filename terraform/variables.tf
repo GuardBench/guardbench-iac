@@ -197,6 +197,24 @@ variable "db_port" {
   default     = 5432
 }
 
+variable "sagemaker_classifier_system_prompt" {
+  description = "Approved fixed system prompt for the SageMaker response behavior classifier; empty leaves the backend classifier safely unconfigured"
+  type        = string
+  default     = ""
+}
+
+variable "sagemaker_classifier_endpoint_enabled" {
+  description = "Create the billable ml.g5.xlarge SageMaker real-time endpoint; model, endpoint configuration, IAM, and PrivateLink remain managed when false"
+  type        = bool
+  default     = false
+}
+
+variable "sagemaker_classifier_user_prompt_template" {
+  description = "Optional approved user prompt template for the SageMaker classifier; empty uses the backend default"
+  type        = string
+  default     = ""
+}
+
 variable "db_access_host_enabled" {
   description = "Create the private SSM-managed host used for RDS port forwarding"
   type        = bool

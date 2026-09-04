@@ -64,6 +64,11 @@ output "backend_github_actions_role_arn" {
   value       = aws_iam_role.backend_github_actions_deploy.arn
 }
 
+output "backend_performance_github_actions_role_arn" {
+  description = "Role ARN used by Performance Backend GitHub Actions via OIDC"
+  value       = aws_iam_role.backend_performance_github_actions_deploy.arn
+}
+
 # ============================================
 # ALB Outputs
 # ============================================
@@ -110,9 +115,24 @@ output "performance_ecs_service_name" {
   value       = aws_ecs_service.performance_app.name
 }
 
+output "performance_ecs_cluster_name" {
+  description = "ECS cluster name for the Performance Backend deployment"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "performance_ecs_container_name" {
+  description = "Container name used by the Performance Backend task definition"
+  value       = "app"
+}
+
 output "performance_ecs_task_definition_family" {
   description = "Dedicated performance application ECS task definition family"
   value       = aws_ecs_task_definition.performance_app.family
+}
+
+output "performance_ecs_task_definition_arn" {
+  description = "Terraform-managed bootstrap task definition ARN for Performance Backend"
+  value       = aws_ecs_task_definition.performance_app.arn
 }
 
 output "ecr_repository_url" {
@@ -309,6 +329,21 @@ output "vpc_endpoint_bedrock_runtime_id" {
 output "vpc_endpoint_bedrock_id" {
   description = "Bedrock VPC endpoint ID"
   value       = aws_vpc_endpoint.bedrock.id
+}
+
+output "vpc_endpoint_sagemaker_runtime_id" {
+  description = "SageMaker Runtime VPC interface endpoint ID used by private ECS tasks"
+  value       = aws_vpc_endpoint.sagemaker_runtime.id
+}
+
+output "sagemaker_classifier_endpoint_name" {
+  description = "Exact SageMaker endpoint name injected into the backend task definition"
+  value       = local.sagemaker_classifier_endpoint_name
+}
+
+output "sagemaker_classifier_endpoint_arn" {
+  description = "Exact endpoint ARN permitted to the backend ECS task role"
+  value       = local.sagemaker_classifier_endpoint_arn
 }
 
 output "vpc_endpoint_ssm_id" {

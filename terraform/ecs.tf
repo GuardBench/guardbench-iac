@@ -24,6 +24,9 @@ locals {
     { name = "SERVER_PORT", value = tostring(var.api_container_port) },
     { name = "SPRING_DOCKER_COMPOSE_ENABLED", value = "false" },
     { name = "AWS_REGION", value = var.aws_region },
+    { name = "SAGEMAKER_CLASSIFIER_ENDPOINT_NAME", value = local.sagemaker_classifier_endpoint_name },
+    { name = "SAGEMAKER_CLASSIFIER_SYSTEM_PROMPT", value = var.sagemaker_classifier_system_prompt },
+    { name = "SAGEMAKER_CLASSIFIER_USER_PROMPT_TEMPLATE", value = var.sagemaker_classifier_user_prompt_template },
     { name = "SQS_ENABLED", value = "true" },
     { name = "WORKER_ENABLED", value = "true" },
     { name = "SPRING_TASK_SCHEDULING_POOL_SIZE", value = "4" },
@@ -172,6 +175,12 @@ resource "aws_iam_role_policy" "app_task" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid      = "InvokeClassifierEndpointOnly"
+        Effect   = "Allow"
+        Action   = ["sagemaker:InvokeEndpoint"]
+        Resource = local.sagemaker_classifier_endpoint_arn
+      },
+      {
         Effect = "Allow"
         Action = [
           "sqs:SendMessage",
@@ -182,14 +191,6 @@ resource "aws_iam_role_policy" "app_task" {
           [for queue in values(aws_sqs_queue.source) : queue.arn],
           [for queue in values(aws_sqs_queue.performance_source) : queue.arn],
         )
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "bedrock:CreateGuardrailVersion",
-          "bedrock:ApplyGuardrail",
-        ]
-        Resource = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:guardrail/*"
       },
       {
         Effect = "Allow"
@@ -312,6 +313,14 @@ resource "aws_ecs_service" "performance_app" {
   deployment_circuit_breaker {
     enable   = true
     rollback = true
+  }
+
+  # Terraform creates the bootstrap task definition, while Backend CI owns
+  # subsequent application revisions and deployments for this service.
+  # Without this lifecycle rule, an infrastructure-only apply could roll the
+  # service back to the Terraform baseline revision.
+  lifecycle {
+    ignore_changes = [task_definition]
   }
 
   # The existing shared service must detach from this target group before the
