@@ -318,12 +318,12 @@ output "vpc_endpoint_sagemaker_runtime_id" {
 
 output "sagemaker_classifier_endpoint_name" {
   description = "Exact SageMaker endpoint name injected into the backend task definition"
-  value       = aws_sagemaker_endpoint.classifier.name
+  value       = local.sagemaker_classifier_endpoint_name
 }
 
 output "sagemaker_classifier_endpoint_arn" {
   description = "Exact endpoint ARN permitted to the backend ECS task role"
-  value       = aws_sagemaker_endpoint.classifier.arn
+  value       = local.sagemaker_classifier_endpoint_arn
 }
 
 output "vpc_endpoint_ssm_id" {

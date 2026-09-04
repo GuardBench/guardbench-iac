@@ -6,6 +6,7 @@
 locals {
   sagemaker_classifier_name          = "guardbench-qwen3-4b"
   sagemaker_classifier_endpoint_name = "guardbench-qwen3-4b-endpoint"
+  sagemaker_classifier_endpoint_arn  = "arn:${data.aws_partition.current.partition}:sagemaker:${var.aws_region}:${data.aws_caller_identity.current.account_id}:endpoint/guardbench-qwen3-4b-endpoint"
   sagemaker_jumpstart_bucket         = "jumpstart-cache-prod-${var.aws_region}"
 }
 
@@ -119,6 +120,8 @@ resource "aws_sagemaker_endpoint_configuration" "classifier" {
 }
 
 resource "aws_sagemaker_endpoint" "classifier" {
+  count = var.sagemaker_classifier_endpoint_enabled ? 1 : 0
+
   name                 = local.sagemaker_classifier_endpoint_name
   endpoint_config_name = aws_sagemaker_endpoint_configuration.classifier.name
 }

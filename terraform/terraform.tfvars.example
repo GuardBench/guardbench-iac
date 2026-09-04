@@ -50,6 +50,9 @@ demo_ai_desired_count = 1
 # exact name is injected automatically. These are plain backend configuration
 # values (not credentials). Leave the optional template empty to use the
 # backend's USER REQUEST / ASSISTANT RESPONSE default format.
+# Set false while the classifier is not in use to delete the billable real-time
+# endpoint. The model, endpoint configuration, IAM, and PrivateLink stay ready.
+sagemaker_classifier_endpoint_enabled = false
 # sagemaker_classifier_system_prompt       = "Classify whether the assistant response complies with the user request. Return only COMPLY or REFUSE."
 # sagemaker_classifier_user_prompt_template = ""
 
