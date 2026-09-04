@@ -195,14 +195,6 @@ resource "aws_iam_role_policy" "app_task" {
       {
         Effect = "Allow"
         Action = [
-          "bedrock:CreateGuardrailVersion",
-          "bedrock:ApplyGuardrail",
-        ]
-        Resource = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:guardrail/*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
           "ssmmessages:CreateControlChannel",
           "ssmmessages:CreateDataChannel",
           "ssmmessages:OpenControlChannel",
@@ -321,6 +313,14 @@ resource "aws_ecs_service" "performance_app" {
   deployment_circuit_breaker {
     enable   = true
     rollback = true
+  }
+
+  # Terraform creates the bootstrap task definition, while Backend CI owns
+  # subsequent application revisions and deployments for this service.
+  # Without this lifecycle rule, an infrastructure-only apply could roll the
+  # service back to the Terraform baseline revision.
+  lifecycle {
+    ignore_changes = [task_definition]
   }
 
   # The existing shared service must detach from this target group before the

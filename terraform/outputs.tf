@@ -64,6 +64,11 @@ output "backend_github_actions_role_arn" {
   value       = aws_iam_role.backend_github_actions_deploy.arn
 }
 
+output "backend_performance_github_actions_role_arn" {
+  description = "Role ARN used by Performance Backend GitHub Actions via OIDC"
+  value       = aws_iam_role.backend_performance_github_actions_deploy.arn
+}
+
 # ============================================
 # ALB Outputs
 # ============================================
@@ -110,9 +115,24 @@ output "performance_ecs_service_name" {
   value       = aws_ecs_service.performance_app.name
 }
 
+output "performance_ecs_cluster_name" {
+  description = "ECS cluster name for the Performance Backend deployment"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "performance_ecs_container_name" {
+  description = "Container name used by the Performance Backend task definition"
+  value       = "app"
+}
+
 output "performance_ecs_task_definition_family" {
   description = "Dedicated performance application ECS task definition family"
   value       = aws_ecs_task_definition.performance_app.family
+}
+
+output "performance_ecs_task_definition_arn" {
+  description = "Terraform-managed bootstrap task definition ARN for Performance Backend"
+  value       = aws_ecs_task_definition.performance_app.arn
 }
 
 output "ecr_repository_url" {

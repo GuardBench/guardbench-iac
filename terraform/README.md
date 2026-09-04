@@ -106,6 +106,35 @@ aws ssm start-session \
 
 Performance RDS는 같은 명령에서 `performance_rds_endpoint` output과 다른 local port(예: `15433`)를 사용한다. PostgreSQL username/password는 RDS가 관리하는 Secrets Manager secret에서 확인하며 Terraform output이나 task definition에 출력하지 않는다.
 
+## Performance Backend application revision ownership
+
+`aws_ecs_task_definition.performance_app`은 Terraform이 만드는 bootstrap/infrastructure
+Task Definition이다. CPU·memory, environment/secrets, IAM, networking, logging을 변경하면
+Terraform이 새 bootstrap revision을 등록하지만, `aws_ecs_service.performance_app`의
+`task_definition`은 Backend CI가 소유한다. Terraform에는 해당 속성의 `ignore_changes`가
+설정되어 있으므로 Backend CI가 배포한 application revision을 다음 Terraform apply가
+bootstrap revision으로 되돌리지 않는다.
+
+Backend CI는 Terraform이 제공한 Performance task-definition family의 최신 `ACTIVE`
+revision을 base로 읽고, `app` container의 immutable Git SHA image만 교체해 새 revision을
+등록한 뒤 Performance service를 update한다. Backend CI가 사용할 계약 값은 다음 output으로
+확인한다.
+
+```bash
+terraform output -raw performance_ecs_cluster_name
+terraform output -raw performance_ecs_service_name
+terraform output -raw performance_ecs_container_name
+terraform output -raw performance_ecs_task_definition_family
+terraform output -raw performance_ecs_task_definition_arn
+```
+
+각 값은 각각 `ECS_CLUSTER`, `ECS_SERVICE`, `ECS_CONTAINER_NAME`,
+`ECS_TASK_DEFINITION_FAMILY`와 bootstrap 기준 revision에 매핑한다. Performance 배포용
+GitHub Actions environment/variables는 Backend #199의 이름을 사용하고, Dev service 변수와
+섞지 않는다. Performance service가 `desired_count = 0`인 상태에서도 revision 등록은
+가능하지만 실제 smoke/load 실행 전에는 service와 dependency(RDS, queue, SageMaker 등)를
+별도로 활성화해야 한다.
+
 ## Dev/Performance 동시 실행
 
 Dev Backend service(`guardbench-dev-app`)는 public ALB와 Dev RDS/queue를 사용한다. Performance Backend service(`guardbench-dev-performance-app`)는 performance internal ALB와 Performance RDS/queue를 사용한다. Performance service를 켜려면 다음 변수를 설정한다.
@@ -116,7 +145,7 @@ performance_app_desired_count = 1
 performance_runner_enabled    = true
 ```
 
-이제 Performance 실행을 위해 `ecs_db_target`을 바꾸거나 Dev service를 재배포할 필요가 없다. Performance service의 task definition은 Terraform이 관리하고, 기존 Dev service의 task definition revision은 Backend GitHub Actions가 계속 관리한다. 구조 변경을 적용한 뒤에는 Dev Backend deploy workflow를 한 번 실행해 Dev service가 Dev RDS/queue 환경변수를 가진 최신 revision을 사용하도록 확인한다. 이 일회성 migration 전에는 기존 shared service가 Performance baseline revision을 계속 가리킬 수 있으므로, 새 baseline을 등록한 뒤 Dev deploy를 완료하고 Performance service를 켠다.
+이제 Performance 실행을 위해 `ecs_db_target`을 바꾸거나 Dev service를 재배포할 필요가 없다. Performance service의 bootstrap task definition과 infrastructure shape은 Terraform이 관리하고, 이후 application task definition revision과 service deployment는 Backend GitHub Actions가 관리한다. 구조 변경을 적용한 뒤에는 Terraform apply 후 Backend #199 workflow를 실행해 최신 bootstrap revision을 application revision의 base로 사용하도록 확인한다.
 
 ```bash
 terraform output -raw ecs_task_definition_arn
@@ -276,6 +305,22 @@ gh variable set ECS_CONTAINER_NAME --repo GuardBench/guardbench-backend --env de
 gh variable set ECS_TASK_DEFINITION_FAMILY --repo GuardBench/guardbench-backend --env dev --body "guardbench-dev-app"
 ```
 
+Performance 배포 job은 Backend #199의 `performance` Environment와 전용 OIDC role을 사용한다.
+role ARN은 다음 output으로 확인한다.
+
+```bash
+terraform output -raw backend_performance_github_actions_role_arn
+terraform output -raw ecr_repository_url
+terraform output -raw performance_ecs_cluster_name
+terraform output -raw performance_ecs_service_name
+terraform output -raw performance_ecs_container_name
+terraform output -raw performance_ecs_task_definition_family
+```
+
+즉 `ECR_REPOSITORY=guardbench-dev`, `ECS_CLUSTER=guardbench-dev-cluster`, `ECS_SERVICE=guardbench-dev-performance-app`,
+`ECS_CONTAINER_NAME=app`, `ECS_TASK_DEFINITION_FAMILY=guardbench-dev-performance-app`이다.
+Dev 배포 변수와 Performance 배포 변수를 같은 job에서 재사용하지 않는다.
+
 Backend issue #142 적용 후 backend workflow는 `permissions: id-token: write`, `environment: dev`, `configure-aws-credentials`의 `role-to-assume`, 그리고 다음 리소스 변수를 사용한다. 현재 workflow가 이 계약을 적용하기 전에는 `ECS_TASK_DEFINITION_FAMILY`를 설정해도 Service의 current revision base 문제가 해결되지 않는다.
 
 - `AWS_REGION`: `ap-northeast-2`
@@ -285,7 +330,14 @@ Backend issue #142 적용 후 backend workflow는 `permissions: id-token: write`
 - `ECS_CONTAINER_NAME`: `app`
 - `ECS_TASK_DEFINITION_FAMILY`: `guardbench-dev-app`
 
-이 Role은 지정된 ECR repository push, `guardbench-dev-app` task definition family 등록, 해당 ECS service 조회·갱신, ECS execution/app task role에 대한 제한된 `iam:PassRole`만 허용한다. Task definition tags를 workflow에서 전달하지 않으므로 `ecs:TagResource`는 부여하지 않는다.
+Dev deploy role은 `guardbench-dev-app` task definition family와 Dev service만 허용한다.
+Performance 전용 deploy role은 지정된 ECR repository push,
+`guardbench-dev-performance-app` task definition family 등록, Performance service 조회·갱신,
+ECS execution/app task role에 대한 제한된 `iam:PassRole`만 허용한다. Performance role의
+OIDC trust subject는 정확히
+`repo:GuardBench/guardbench-backend:environment:performance`이며, GitHub Environment의
+Allowed branch는 `dev`로 제한해야 한다. Task definition tags를 workflow에서 전달하지 않으므로
+`ecs:TagResource`는 부여하지 않는다.
 
 ### ECS task definition 소유권
 
