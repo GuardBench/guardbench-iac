@@ -229,6 +229,8 @@ jq -r '.choices[0].message.content' /tmp/guardbench-qwen3-smoke.json
 
 마지막 출력은 정확히 `COMPLY` 또는 `REFUSE`여야 한다. 비용을 중단하려면 endpoint를 Terraform에서 제거하는 `apply`를 실행해야 하며, model/config만 남겨도 실행 인스턴스 비용은 발생하지 않는다.
 
+Classifier가 아직 사용되지 않을 때는 `sagemaker_classifier_endpoint_enabled = false`로 설정하고 apply한다. Real-Time endpoint만 삭제되어 instance-hour 과금이 중단되고, model, endpoint configuration, IAM policy, PrivateLink는 보존된다. 배포 직전 `true`로 되돌려 apply하면 endpoint를 다시 생성한다.
+
 ## 프론트엔드 GitHub Actions OIDC 배포
 
 계정에 `token.actions.githubusercontent.com` OIDC provider가 이미 있는지 먼저 확인한다.

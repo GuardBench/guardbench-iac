@@ -24,7 +24,7 @@ locals {
     { name = "SERVER_PORT", value = tostring(var.api_container_port) },
     { name = "SPRING_DOCKER_COMPOSE_ENABLED", value = "false" },
     { name = "AWS_REGION", value = var.aws_region },
-    { name = "SAGEMAKER_CLASSIFIER_ENDPOINT_NAME", value = aws_sagemaker_endpoint.classifier.name },
+    { name = "SAGEMAKER_CLASSIFIER_ENDPOINT_NAME", value = local.sagemaker_classifier_endpoint_name },
     { name = "SAGEMAKER_CLASSIFIER_SYSTEM_PROMPT", value = var.sagemaker_classifier_system_prompt },
     { name = "SAGEMAKER_CLASSIFIER_USER_PROMPT_TEMPLATE", value = var.sagemaker_classifier_user_prompt_template },
     { name = "SQS_ENABLED", value = "true" },
@@ -178,7 +178,7 @@ resource "aws_iam_role_policy" "app_task" {
         Sid      = "InvokeClassifierEndpointOnly"
         Effect   = "Allow"
         Action   = ["sagemaker:InvokeEndpoint"]
-        Resource = aws_sagemaker_endpoint.classifier.arn
+        Resource = local.sagemaker_classifier_endpoint_arn
       },
       {
         Effect = "Allow"

@@ -203,6 +203,12 @@ variable "sagemaker_classifier_system_prompt" {
   default     = ""
 }
 
+variable "sagemaker_classifier_endpoint_enabled" {
+  description = "Create the billable ml.g5.xlarge SageMaker real-time endpoint; model, endpoint configuration, IAM, and PrivateLink remain managed when false"
+  type        = bool
+  default     = false
+}
+
 variable "sagemaker_classifier_user_prompt_template" {
   description = "Optional approved user prompt template for the SageMaker classifier; empty uses the backend default"
   type        = string
