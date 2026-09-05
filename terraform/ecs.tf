@@ -228,8 +228,8 @@ resource "aws_ecs_task_definition" "performance_app" {
   family                   = "${var.project}-${var.environment}-performance-app"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = var.api_cpu
-  memory                   = var.api_memory
+  cpu                      = var.performance_api_cpu
+  memory                   = var.performance_api_memory
 
   runtime_platform {
     cpu_architecture        = "X86_64"
