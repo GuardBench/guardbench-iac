@@ -113,11 +113,12 @@ resource "aws_instance" "db_access" {
   iam_instance_profile        = aws_iam_instance_profile.db_access.name
   associate_public_ip_address = false
 
-  user_data = <<-USERDATA
+  user_data = replace(<<-USERDATA
     #!/bin/bash
     set -euo pipefail
     systemctl enable --now amazon-ssm-agent || true
   USERDATA
+  , "\r\n", "\n")
 
   root_block_device {
     volume_type           = "gp3"

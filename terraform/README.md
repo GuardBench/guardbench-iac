@@ -103,7 +103,7 @@ terraform apply
 
 ## Performance RDS 운영 전제
 
-성능 테스트용 RDS는 dev RDS와 별도로 생성되며, private subnet에 위치하고 Dev Backend SG, Performance Backend SG, Performance Runner SG, SSM RDS access host SG에서만 PostgreSQL 접근을 허용한다. ECS cluster는 dev와 공유하지만 Dev/Performance Backend ECS service와 각각의 SQS/DLQ 집합은 분리한다. Performance service는 기본적으로 0 task이며, 동시 실행이 필요할 때만 별도로 활성화한다. 실행 전 Performance Runner가 기존 TestRun과 performance Source Queue/DLQ 상태를 검증해야 한다.
+성능 테스트용 RDS는 dev RDS와 별도로 생성되며, private subnet에 위치하고 Dev Backend SG, Performance Backend SG, SSM RDS access host SG에서만 PostgreSQL 접근을 허용한다. Performance Runner는 RDS에 직접 연결하지 않고 RDS control-plane 지표만 읽는다. ECS cluster는 dev와 공유하지만 Dev/Performance Backend ECS service와 각각의 SQS/DLQ 집합은 분리한다. Performance service는 기본적으로 0 task이며, 동시 실행이 필요할 때만 별도로 활성화한다. 실행 전 Performance Runner가 기존 TestRun과 performance Source Queue/DLQ 상태를 검증해야 한다.
 
 ## SQS visibility와 claim lease
 
@@ -113,7 +113,7 @@ Backend `dev`의 execution/resolution claim lease 기본값은 45초이며, HTTP
 
 Dev Backend는 Dev RDS와 Dev queue를 고정으로 사용하고, Performance Backend는 Performance RDS와 Performance queue를 고정으로 사용한다. `ecs_db_target`은 기존 `terraform.tfvars` 호환을 위해 남아 있지만 더 이상 리소스 선택에 사용하지 않는다. Performance RDS는 MVP의 격리된 고정 의존 인프라다. instance class, storage, backup retention 변수에는 default가 없으므로 적용 전에 고정할 구성 값을 모두 명시해야 하며, 실제 적용값은 재현성을 위해 기록하고 CloudWatch로 병목 여부를 관찰한다. RDS capacity sweep/tuning은 MVP 범위가 아니다. Dev/Performance service는 shared ECS task execution/app task role을 사용하며 두 RDS secret과 두 queue 집합에 필요한 권한만 허용한다. credential은 Terraform output이나 task definition plaintext에 노출하지 않는다. 외부 AI provider를 호출하는 ECS task는 private route table의 NAT Gateway와 API security group의 outbound HTTPS rule을 사용한다. AWS Bedrock 등 VPC Endpoint가 지원하는 서비스는 기존 private endpoint를 우선 사용한다.
 
-전용 Performance Runner EC2는 `performance_runner_enabled = false`가 기본값이며 일반적인 `dev` 배포에서는 생성하지 않는다. Backend의 `performance/build-runner-image.sh`로 이미지를 빌드하고 Terraform output의 전용 ECR repository에 Backend commit SHA tag로 push한 뒤, 성능 테스트를 실행할 때만 이 값을 `true`로 설정하고 Terraform apply를 수행한다. Spot runner는 `one-time` 요청이므로 테스트 종료 후 인스턴스를 삭제하거나 중단하면 다음 테스트 전에 다시 apply해야 한다.
+전용 Performance Runner EC2는 `performance_runner_enabled = false`가 기본값이며 일반적인 `dev` 배포에서는 생성하지 않는다. Runner image는 Backend application image와 독립적으로 빌드할 수 있으며, 전용 ECR repository에 immutable Runner commit SHA tag로 push한다. `performance_runner_image_tag`는 Runner image를 기록하고, bootstrap은 ECS Performance service의 실제 application image tag에서 `APP_REVISION`을 조회해 주입한다. 성능 테스트를 실행할 때만 runner를 `true`로 설정하고 Terraform apply를 수행한다. Spot runner는 `one-time` 요청이므로 테스트 종료 후 인스턴스를 삭제하거나 중단하면 다음 테스트 전에 다시 apply해야 한다.
 
 ## Private RDS 개발자 접근
 
@@ -209,16 +209,18 @@ terraform output -raw performance_target_revision
 
 ```bash
 runner_repository="$(terraform output -raw performance_runner_ecr_repository_url)"
-runner_revision="$(git -C ../guardbench-backend rev-parse HEAD)"
+# Use the immutable commit SHA of the Runner image source. This is independent
+# from the Performance Backend application revision recorded in APP_REVISION.
+runner_revision="<runner-image-commit-sha>"
 ../guardbench-backend/performance/build-runner-image.sh "$runner_repository"
 aws ecr get-login-password --region ap-northeast-2 \
   | docker login --username AWS --password-stdin "${runner_repository%%/*}"
 ../guardbench-backend/bin/publish-runner-image "$runner_repository:$runner_revision"
 ```
 
-Runner EC2는 ECS Optimized AL2023 AMI를 사용하므로 private subnet에서 별도 Docker 패키지 다운로드가 필요 없다. Terraform apply 후 SSM Command document를 `RunnerImage=$runner_repository:$runner_revision` 파라미터로 실행하면 ECR pull과 image `verify-runtime` 검증이 수행된다. 실제 Runner 실행에 필요한 `PERF_*` 환경변수와 profile/dataset은 Backend 성능테스트 문서의 실행 절차를 따른다.
+Runner EC2는 ECS Optimized AL2023 AMI를 사용하므로 private subnet에서 별도 Docker 패키지 다운로드가 필요 없다. Terraform apply 후 SSM Command document를 `RunnerImage=$runner_repository:$runner_revision` 파라미터로 실행하면 ECR digest 검증, Python Runner import와 k6 확인, 실제 Performance ECS application revision 조회, 실행 메타데이터 파일 생성을 수행한다. Bootstrap은 RDS reset, migration, psql, Spring Boot, Gradle, Flyway, DB secret 조회를 수행하지 않으며, 이를 요구하는 기존 image의 `verify-runtime`도 호출하지 않는다.
 
-SSM bootstrap은 실제 성능 실행 전에 Runner host에서 Performance internal ALB의 `/health`와 `/api/v1/test-suites?page=1&size=1`을 확인한다. 따라서 `PERF_BASE_URL`에는 public ALB 주소를 사용하지 말고 다음 Terraform output을 사용한다.
+API health는 bootstrap이 아닌 실행 launcher에서 확인한다. 실행 전 Runner host에서 Performance internal ALB의 `/health`와 `/api/v1/test-suites?page=1&size=1`을 확인한다. 따라서 `PERF_BASE_URL`에는 public ALB 주소를 사용하지 말고 다음 Terraform output을 사용한다.
 
 ```bash
 export PERF_BASE_URL="$(terraform output -raw performance_runner_api_url)"
@@ -227,7 +229,22 @@ export PERF_TARGET_MODEL="$(terraform output -raw performance_target_model)"
 export PERF_TARGET_REVISION="$(terraform output -raw performance_target_revision)"
 ```
 
-Bootstrap은 image 안의 `/workspace/bin` script에 CRLF가 포함되어 있으면 `verify-runtime` 실행 전에 중단하고 문제 파일과 재빌드 방향을 출력한다. CRLF 오류가 발생하면 Backend Runner image를 LF checkout 환경에서 다시 build/publish하고, 배포할 image tag가 실제 image digest와 일치하는지 확인해야 한다. 현재 Performance API의 canonical health endpoint는 `/health`이며, health check가 404이면 성능 workload를 시작하지 않고 Backend image의 endpoint mapping과 image digest를 먼저 확인한다.
+Bootstrap은 image 안의 `/workspace/bin` script에 CRLF가 포함되어 있으면 중단하고 문제 파일과 재빌드 방향을 출력한다. CRLF 오류가 발생하면 Runner image를 LF checkout 환경에서 다시 build/publish하고, 배포할 image tag가 실제 image digest와 일치하는지 확인해야 한다. 현재 Performance API의 canonical health endpoint는 `/health`이며, health check가 404이면 성능 workload를 시작하지 않고 Runner image의 endpoint mapping과 image digest를 먼저 확인한다.
+
+실행 절차는 `Terraform apply → Backend Performance 배포 → Runner bootstrap → Runner preflight → smoke/load 실행 → 결과 분석`으로 분리한다. Preflight는 active TestRun, source queue/DLQ, APP/INFRA revision, API health, ECS/RDS/SageMaker capacity를 확인하고 결과를 남긴다. Preflight가 성공한 뒤에만 workload를 실행하며, k6 원본 결과와 결과 parser/report 오류는 별도로 기록한다.
+
+Runner host에서는 다음 launcher를 사용한다. 기존 reset용 `run-smoke`는 bootstrap 시 `run-smoke.legacy-disabled`로 보관한다.
+
+```bash
+/opt/guardbench-performance-runner/run-performance \
+  --profile /workspace/performance/profiles/smoke.yaml
+```
+
+Launcher는 digest로 고정된 image를 실행하고, 실행마다 ECS `app` container의 실제 Git SHA를 다시 조회한다. 동일 host의 중복 실행을 잠그고, 완료되지 않은 ECS rollout과 구형 DB reset/migration image를 workload 시작 전에 차단한다. Backend #212가 반영된 Runner image를 publish하고 `performance_runner_image_tag`를 갱신한 뒤 apply/bootstrap해야 실제 테스트를 시작할 수 있다. IaC apply 성공은 해당 Backend 변경이나 smoke 성공을 의미하지 않는다. TestRun/queue/DLQ/capacity 검증은 image의 실행 전 검증으로 유지하며, 이 launcher가 이를 우회하지 않는다.
+
+실행별 환경, ECS task definition, Runner digest, 원본 로그와 결과는 host의 `results/execution-*` 아래에 보관한다. 결과 업로드/분석은 Runner의 책임이다. 이미지의 종료 코드를 그대로 반환하므로 parser/report 실패도 성공으로 처리하지 않는다. 이 IaC launcher는 별도의 standalone preflight CLI를 가정하지 않는다.
+
+EC2 `user_data`는 최초 부팅용 Docker 설정만 소유하고 기존 host에서는 변경을 무시한다. 이후 설정 변경은 SSM bootstrap으로 적용한다. 따라서 줄바꿈 변경 때문에 실행 중인 disposable Spot host를 재시작하지 않는다. 새로운 host의 user data와 ECS prompt는 LF로 정규화한다. 기존 CRLF prompt를 가진 Terraform base task definition은 한 번 새 revision으로 등록되며, Backend CI가 소유한 실행 중인 ECS Service revision은 유지된다.
 
 ## SageMaker Qwen3-4B Response Behavior Classifier
 
@@ -337,7 +354,9 @@ role ARN은 다음 output으로 확인한다.
 
 ```bash
 terraform output -raw backend_performance_github_actions_role_arn
+terraform output -raw performance_runner_publish_github_actions_role_arn
 terraform output -raw ecr_repository_url
+terraform output -raw performance_runner_ecr_repository_url
 terraform output -raw performance_ecs_cluster_name
 terraform output -raw performance_ecs_service_name
 terraform output -raw performance_ecs_container_name
@@ -365,6 +384,24 @@ OIDC trust subject는 정확히
 `repo:GuardBench@316853045/guardbench-backend@1333885107:environment:performance`이며, GitHub Environment의
 Allowed branch는 `dev`로 제한해야 한다. Task definition tags를 workflow에서 전달하지 않으므로
 `ecs:TagResource`는 부여하지 않는다.
+
+Runner image publish workflow(`#213`)는 `performance_runner_publish_github_actions_role_arn`
+output의 별도 role을 사용한다. GitHub `performance` Environment에는 다음 repository
+variables를 설정한다.
+
+```bash
+gh variable set AWS_REGION --repo GuardBench/guardbench-backend --env performance --body ap-northeast-2
+gh variable set AWS_RUNNER_PUBLISH_ROLE_ARN --repo GuardBench/guardbench-backend --env performance \
+  --body "$(terraform output -raw performance_runner_publish_github_actions_role_arn)"
+gh variable set RUNNER_ECR_REPOSITORY --repo GuardBench/guardbench-backend --env performance \
+  --body "$(terraform output -raw performance_runner_ecr_repository_name)"
+```
+
+이 role은 `performance-runner` ECR repository의 `DescribeRepositories`, `BatchGetImage`,
+`DescribeImages`, layer upload 및 `PutImage`만 허용하고 ECS/RDS/SageMaker 권한을 갖지
+않는다. Trust subject는 Performance Backend 배포 role과 동일하게
+`repo:GuardBench@316853045/guardbench-backend@1333885107:environment:performance`로
+제한한다.
 
 ### ECS task definition 소유권
 

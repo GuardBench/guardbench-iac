@@ -3,6 +3,7 @@
 locals {
   performance_runner_image_uri = var.performance_runner_image_tag == null ? null : "${aws_ecr_repository.performance_runner.repository_url}:${var.performance_runner_image_tag}"
   performance_runner_required_environment_keys = [
+    "AWS_REGION",
     "APP_REVISION",
     "INFRA_REVISION",
     "PERF_BASE_URL",
@@ -23,109 +24,8 @@ locals {
     "PERF_DLQ_WORK_ITEMS_NAME",
     "PERF_DLQ_FINALIZE_NAME",
     "PERFORMANCE_ENVIRONMENT",
-    "PERFORMANCE_DB_NAME",
-    "PERFORMANCE_RESET_CONFIRM",
-    "PERFORMANCE_DATABASE_HOST",
-    "PERFORMANCE_DATABASE_PORT",
-    "PERFORMANCE_DATABASE_JDBC_URL",
-    "PERFORMANCE_DB_SECRET_ARN",
     "PERFORMANCE_RESULTS_BUCKET",
   ]
-
-  # Installed by the bootstrap document. It deliberately accepts no ad-hoc
-  # flags: the canonical smoke profile and reset guard are IaC-owned.
-  performance_runner_smoke_script = <<-SCRIPT
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    readonly runner_root=/opt/guardbench-performance-runner
-    readonly environment_file="$runner_root/environment"
-    readonly image_file="$runner_root/image"
-    readonly expected_image_file="$runner_root/expected-image"
-    readonly digest_file="$runner_root/digest"
-    readonly expected_digest_file="$runner_root/expected-digest"
-
-    if [[ $# -ne 0 ]]; then
-      echo "Usage: run-smoke (no arguments; runs the IaC-pinned smoke profile)" >&2
-      exit 2
-    fi
-
-    for required_file in "$environment_file" "$image_file" "$expected_image_file" "$digest_file" "$expected_digest_file"; do
-      [[ -s "$required_file" ]] || { echo "Runner bootstrap marker is missing: $required_file" >&2; exit 1; }
-    done
-
-    while IFS= read -r required_key; do
-      grep -q "^$required_key=" "$environment_file" || {
-        echo "Runner environment is missing required key: $required_key" >&2
-        exit 1
-      }
-    done <<'REQUIRED_KEYS'
-    ${join("\n", local.performance_runner_required_environment_keys)}
-    REQUIRED_KEYS
-
-    runner_image="$(<"$image_file")"
-    expected_runner_image="$(<"$expected_image_file")"
-    recorded_digest="$(<"$digest_file")"
-    expected_digest="$(<"$expected_digest_file")"
-    [[ "$runner_image" == "$expected_runner_image" ]] || {
-      echo "Runner image marker does not match the Terraform-pinned image." >&2
-      exit 1
-    }
-
-    image_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$runner_image")"
-    [[ "$${image_digest##*@}" == "$recorded_digest" && "$recorded_digest" == "$expected_digest" ]] || {
-      echo "Runner image digest does not match the Terraform-verified ECR digest." >&2
-      exit 1
-    }
-
-    expected_app_revision="$(sed -n 's/^APP_REVISION=//p' "$environment_file")"
-    image_app_revision="$(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$runner_image" | sed -n 's/^APP_REVISION=//p')"
-    [[ "$image_app_revision" == "$expected_app_revision" ]] || {
-      echo "Runner APP_REVISION does not match the image tag pinned by Terraform." >&2
-      exit 1
-    }
-
-    secret_arn="$(sed -n 's/^PERFORMANCE_DB_SECRET_ARN=//p' "$environment_file")"
-    secret_file="$(mktemp)"
-    chmod 0600 "$secret_file"
-    cleanup() { rm -f "$secret_file"; }
-    trap cleanup EXIT
-    aws secretsmanager get-secret-value --secret-id "$secret_arn" --query SecretString --output text > "$secret_file"
-
-    docker run --rm \
-      --env-file "$environment_file" \
-      --env PERFORMANCE_DB_SECRET_FILE=/run/guardbench-performance-runner/db-secret.json \
-      --volume "$secret_file:/run/guardbench-performance-runner/db-secret.json:ro" \
-      --entrypoint python3.11 \
-      "$runner_image" - <<'PYTHON'
-    import json
-    import os
-    import subprocess
-    from pathlib import Path
-    from urllib.parse import quote
-
-    environment = os.environ.copy()
-    secret_path = Path(environment["PERFORMANCE_DB_SECRET_FILE"])
-    secret = json.loads(secret_path.read_text(encoding="utf-8"))
-    username = secret["username"]
-    password = secret["password"]
-    host = environment["PERFORMANCE_DATABASE_HOST"]
-    port = environment["PERFORMANCE_DATABASE_PORT"]
-    database = environment["PERFORMANCE_DB_NAME"]
-    environment["PERFORMANCE_DATABASE_URL"] = (
-        "postgresql://{}:{}@{}:{}/{}?sslmode=require".format(
-            quote(username, safe=""), quote(password, safe=""), host, port, database
-        )
-    )
-    environment["PERFORMANCE_DB_USERNAME"] = username
-    environment["PERFORMANCE_DB_PASSWORD"] = password
-    command = [
-        "python3.11", "-m", "performance.runner.cli", "--reset",
-        "--profile", "/workspace/performance/profiles/smoke.yaml",
-    ]
-    raise SystemExit(subprocess.call(command, cwd="/workspace", env=environment))
-    PYTHON
-  SCRIPT
 
   performance_runner_source_queue_urls = join(",", [
     aws_sqs_queue.performance_source["gb-run-resolve"].url,
@@ -239,12 +139,6 @@ resource "aws_iam_role_policy" "performance_runner" {
         Resource = "*"
       },
       {
-        Sid      = "ReadPerformanceDatabaseCredentials"
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = aws_db_instance.performance.master_user_secret[0].secret_arn
-      },
-      {
         Sid      = "WritePerformanceResults"
         Effect   = "Allow"
         Action   = ["s3:PutObject"]
@@ -268,12 +162,20 @@ resource "aws_instance" "performance_runner" {
   iam_instance_profile        = aws_iam_instance_profile.performance_runner.name
   associate_public_ip_address = false
 
-  user_data = <<-USERDATA
+  user_data = replace(<<-USERDATA
     #!/bin/bash
     set -euo pipefail
     systemctl enable --now docker
     usermod -aG docker ec2-user || true
   USERDATA
+  , "\r\n", "\n")
+
+  # First-boot Docker setup only. Existing disposable Spot hosts retain their
+  # original user data; ongoing configuration is applied by the SSM document.
+  # An EOL-only edit must not stop/restart an existing one-time Spot instance.
+  lifecycle {
+    ignore_changes = [user_data]
+  }
 
   dynamic "instance_market_options" {
     for_each = var.performance_runner_spot ? [1] : []
@@ -308,8 +210,9 @@ resource "aws_instance" "performance_runner" {
 }
 
 # Invoke this document after an immutable Runner image is pushed to the
-# dedicated private ECR repository. The image supplies Python 3.11+, k6, psql,
-# Java 21/Gradle, and backend runner code without requiring NAT access.
+# dedicated private ECR repository. The image supplies the workload runner,
+# preflight checks, and result tooling. Terraform only prepares the host and
+# execution metadata; it does not reset, migrate, or otherwise access RDS.
 resource "aws_ssm_document" "performance_runner_bootstrap" {
   name            = "${var.project}-${var.environment}-performance-runner-bootstrap"
   document_type   = "Command"
@@ -330,9 +233,6 @@ resource "aws_ssm_document" "performance_runner_bootstrap" {
       inputs = {
         runCommand = [
           "set -euo pipefail",
-          "performance_base_url='http://${aws_lb.performance_api.dns_name}'",
-          "curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \"$performance_base_url/health\" >/dev/null",
-          "curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \"$performance_base_url/api/v1/test-suites?page=1&size=1\" >/dev/null",
           "runner_image='{{ RunnerImage }}'",
           "expected_runner_image=\"${local.performance_runner_image_uri == null ? "" : local.performance_runner_image_uri}\"",
           "expected_runner_digest=\"${var.performance_runner_enabled ? data.aws_ecr_image.performance_runner[0].image_digest : ""}\"",
@@ -346,27 +246,24 @@ resource "aws_ssm_document" "performance_runner_bootstrap" {
           "image_digest=\"$(docker image inspect --format '{{index .RepoDigests 0}}' \"$runner_image\")\"",
           "case \"$image_digest\" in *@sha256:*) ;; *) echo 'Runner image digest could not be resolved after pull.' >&2; exit 1 ;; esac",
           "if [ \"$${image_digest##*@}\" != \"$expected_runner_digest\" ]; then echo \"Pulled Runner image digest does not match Terraform-verified ECR digest.\" >&2; exit 1; fi",
-          "image_app_revision=\"$(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \"$runner_image\" | sed -n 's/^APP_REVISION=//p')\"",
-          "if [ \"$image_app_revision\" != \"${var.performance_runner_image_tag}\" ]; then echo \"Runner APP_REVISION must equal the Terraform-pinned image tag.\" >&2; exit 1; fi",
-
           "crlf_files=\"$(docker run --rm --entrypoint python3.11 \"$runner_image\" -c 'from pathlib import Path; print(\"\\n\".join(str(path) for path in Path(\"/workspace/bin\").rglob(\"*\") if path.is_file() and b\"\\r\\n\" in path.read_bytes()))')\"",
           "if [ -n \"$crlf_files\" ]; then echo \"Runner image contains CRLF scripts: $crlf_files\" >&2; echo 'Rebuild and republish the image from an LF-preserving checkout.' >&2; exit 1; fi",
-          "docker run --rm --entrypoint /workspace/bin/verify-runtime \"$runner_image\"",
+          "docker run --rm --entrypoint python3.11 \"$runner_image\" -c 'import performance.runner'",
+          "docker run --rm --entrypoint k6 \"$runner_image\" version",
 
           "install -d -m 0755 /opt/guardbench-performance-runner",
+
+          "performance_task_definition=\"$(aws ecs describe-services --cluster '${aws_ecs_cluster.main.name}' --services '${var.project}-${var.environment}-performance-app' --query 'services[0].taskDefinition' --output text)\"",
+          "performance_app_image=\"$(aws ecs describe-task-definition --task-definition \"$performance_task_definition\" --query \"taskDefinition.containerDefinitions[?name=='app'].image | [0]\" --output text)\"",
+          "performance_app_revision=\"$${performance_app_image##*:}\"",
+          "if ! printf '%s' \"$performance_app_revision\" | grep -Eq '^[0-9a-f]{40}$'; then echo 'Performance Backend app container must use an immutable Git SHA tag.' >&2; exit 1; fi",
 
           "environment_file=/opt/guardbench-performance-runner/environment",
           ": > \"$environment_file\"",
           "printf \"%s\\n\" \"AWS_REGION=${var.aws_region}\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"INFRA_REVISION=${var.performance_runner_infra_revision}\" >> \"$environment_file\"",
-          "printf \"%s\\n\" \"APP_REVISION=${var.performance_runner_image_tag}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"APP_REVISION=$performance_app_revision\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERFORMANCE_ENVIRONMENT=performance\" >> \"$environment_file\"",
-          "printf \"%s\\n\" \"PERFORMANCE_DB_NAME=guardbench_perf\" >> \"$environment_file\"",
-          "printf \"%s\\n\" \"PERFORMANCE_RESET_CONFIRM=RESET_GUARDBENCH_PERF\" >> \"$environment_file\"",
-          "printf \"%s\\n\" \"PERFORMANCE_DATABASE_HOST=${aws_db_instance.performance.address}\" >> \"$environment_file\"",
-          "printf \"%s\\n\" \"PERFORMANCE_DATABASE_PORT=${aws_db_instance.performance.port}\" >> \"$environment_file\"",
-          "printf \"%s\\n\" \"PERFORMANCE_DATABASE_JDBC_URL=jdbc:postgresql://${aws_db_instance.performance.address}:${aws_db_instance.performance.port}/guardbench_perf?sslmode=require\" >> \"$environment_file\"",
-          "printf \"%s\\n\" \"PERFORMANCE_DB_SECRET_ARN=${aws_db_instance.performance.master_user_secret[0].secret_arn}\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERF_BASE_URL=http://${aws_lb.performance_api.dns_name}\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERF_TARGET_URL=http://${aws_lb.performance_api.dns_name}/v1/chat/completions\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERF_TARGET_MODEL=demo-model\" >> \"$environment_file\"",
@@ -385,19 +282,18 @@ resource "aws_ssm_document" "performance_runner_bootstrap" {
           "printf \"%s\\n\" \"PERF_DLQ_WORK_ITEMS_NAME=${local.performance_runner_dlq_names.work_items}\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERF_DLQ_FINALIZE_NAME=${local.performance_runner_dlq_names.finalize}\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERFORMANCE_RESULTS_BUCKET=${aws_s3_bucket.performance_results.id}\" >> \"$environment_file\"",
-          "for required_key in ${join(" ", local.performance_runner_required_environment_keys)}; do grep -q \"^$required_key=\" \"$environment_file\" || { echo \"Runner environment is missing required key: $required_key\" >&2; exit 1; }; done",
+          "for required_key in ${join(" ", local.performance_runner_required_environment_keys)}; do grep -Eq \"^$required_key=.*[^[:space:]].*$\" \"$environment_file\" || { echo \"Runner environment is missing or empty: $required_key\" >&2; exit 1; }; done",
           "chmod 0644 \"$environment_file\"",
 
           "printf \"%s\\n\" \"$runner_image\" > /opt/guardbench-performance-runner/image",
-          "printf \"%s\\n\" \"$image_digest\" > /opt/guardbench-performance-runner/digest",
+          "printf \"%s\\n\" \"$${image_digest##*@}\" > /opt/guardbench-performance-runner/digest",
           "printf \"%s\\n\" \"$expected_runner_image\" > /opt/guardbench-performance-runner/expected-image",
           "printf \"%s\\n\" \"$expected_runner_digest\" > /opt/guardbench-performance-runner/expected-digest",
           "grep \"^INFRA_REVISION=\" \"$environment_file\" | cut -d= -f2- > /opt/guardbench-performance-runner/infra-revision",
           "printf \"%s\\n\" \"$environment_file\" > /opt/guardbench-performance-runner/environment-file",
-          "printf '%s' '${base64encode(local.performance_runner_smoke_script)}' | base64 -d > /opt/guardbench-performance-runner/run-smoke",
-          "chmod 0755 /opt/guardbench-performance-runner/run-smoke",
-
-
+          "printf '%s' '${filebase64("${path.module}/scripts/performance-runner-run.sh")}' | base64 -d > /opt/guardbench-performance-runner/run-performance",
+          "chmod 0755 /opt/guardbench-performance-runner/run-performance",
+          "if [ -f /opt/guardbench-performance-runner/run-smoke ]; then mv /opt/guardbench-performance-runner/run-smoke /opt/guardbench-performance-runner/run-smoke.legacy-disabled; fi",
         ]
       }
     }]

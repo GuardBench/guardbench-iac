@@ -269,16 +269,6 @@ resource "aws_security_group" "performance_runner" {
   }
 }
 
-resource "aws_security_group_rule" "performance_runner_egress_to_rds" {
-  type                     = "egress"
-  from_port                = var.db_port
-  to_port                  = var.db_port
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.performance_rds.id
-  description              = "Reset and migrate performance-test RDS"
-  security_group_id        = aws_security_group.performance_runner.id
-}
-
 resource "aws_security_group_rule" "performance_runner_egress_to_vpc_endpoints" {
   type                     = "egress"
   from_port                = 443
@@ -310,18 +300,6 @@ resource "aws_security_group_rule" "performance_runner_egress_to_s3_gateway" {
   description       = "ECR image layers and performance results through S3 Gateway endpoint"
   security_group_id = aws_security_group.performance_runner.id
 }
-
-
-resource "aws_security_group_rule" "performance_rds_ingress_from_runner" {
-  type                     = "ingress"
-  from_port                = var.db_port
-  to_port                  = var.db_port
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.performance_runner.id
-  description              = "From dedicated performance-test runner"
-  security_group_id        = aws_security_group.performance_rds.id
-}
-
 # ============================================
 # VPC Endpoints Security Group
 # ============================================
