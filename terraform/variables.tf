@@ -178,19 +178,19 @@ variable "demo_ai_bedrock_resource_arns" {
 }
 
 variable "demo_ai_cpu" {
-  description = "CPU units for the Demo AI Fargate task"
+  description = "CPU units for the fixed Demo AI Fargate fixture; keep stable during GuardBench capacity experiments and do not use for MVP capacity sweeps"
   type        = number
   default     = 512
 }
 
 variable "demo_ai_memory" {
-  description = "Memory (MiB) for the Demo AI Fargate task"
+  description = "Memory (MiB) for the fixed Demo AI Fargate fixture; keep stable during GuardBench capacity experiments and do not use for MVP capacity sweeps"
   type        = number
   default     = 1024
 }
 
 variable "demo_ai_desired_count" {
-  description = "Number of Demo AI Fargate tasks used as the performance-test target"
+  description = "Number of Demo AI Fargate fixture tasks; keep stable during GuardBench capacity experiments and do not use for MVP capacity sweeps"
   type        = number
   default     = 1
 

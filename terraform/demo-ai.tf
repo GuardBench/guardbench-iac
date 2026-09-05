@@ -1,4 +1,6 @@
 # OpenAI-compatible Demo AI target for integrated performance tests.
+# Demo AI is a controlled synthetic customer Application Target used to
+# isolate GuardBench performance measurements from external service variability.
 # This service deliberately has its own task definition, service, task role,
 # execution role, log group, and security group. It reuses the existing dev
 # ECS cluster and private subnets but never becomes a backend sidecar.

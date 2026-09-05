@@ -179,6 +179,8 @@ terraform output -raw performance_ecs_service_name
 
 ## Demo AI dev/성능 테스트 Target
 
+Demo AI is a controlled synthetic customer Application Target used to isolate GuardBench performance measurements from external service variability. 실제 고객의 OpenAI-compatible Application Target을 대신하는 고정 fixture이며 GuardBench 자체의 SUT가 아니다. Demo AI 자체의 최대 throughput, CPU saturation, scaling 특성을 측정하지 않으며, Demo AI의 CPU/memory/desired count를 MVP GuardBench capacity sweep 대상으로 사용하지 않는다.
+
 Demo AI는 기존 `guardbench-dev-cluster`를 재사용하는 별도 Fargate Task Definition/Service다. Backend `guardbench-dev-app` 또는 `guardbench-dev-performance-app`의 sidecar가 아니며, 전용 task role·execution role·CloudWatch Log Group·security group을 사용한다. Demo AI image는 `guardbench-demo-ai-service` 전용 ECR repository의 immutable Git SHA tag로 지정한다. dev에서 통합 target으로 사용하므로 예제 설정은 `demo_ai_enabled = true`이며, 비용 절감이나 일시 중지가 필요할 때만 `false`로 바꾼다.
 
 기존 `guardbench-dev-performance-api` internal ALB를 재사용하고 `/v1/chat/completions` path rule만 Demo AI target group으로 전달한다. 기존 ALB default action과 Backend target group은 변경하지 않는다. ALB health check는 Demo AI의 `GET /health`를 사용한다. Runner SG에서 internal ALB SG로 HTTP 80, ALB SG에서 Demo AI task SG로 TCP 8080만 허용되며, Demo AI task는 private subnet에서 `assign_public_ip = false`로 실행된다.
@@ -203,7 +205,7 @@ terraform output -raw performance_target_model
 terraform output -raw performance_target_revision
 ```
 
-이는 각각 `PERF_TARGET_URL`, `PERF_TARGET_MODEL`, `PERF_TARGET_REVISION`에 매핑된다. 현재 값은 `http://<internal-performance-alb>/v1/chat/completions`, `demo-model`, Demo AI immutable image tag다. Runner는 Demo AI container를 실행하지 않고 HTTP client 역할만 수행한다.
+이는 각각 `PERF_TARGET_URL`, `PERF_TARGET_MODEL`, `PERF_TARGET_REVISION`에 매핑된다. 현재 값은 `http://<internal-performance-alb>/v1/chat/completions`, `demo-model`, Demo AI immutable image tag다. Runner는 Demo AI container를 실행하지 않고 HTTP client 역할만 수행한다. 비교 가능한 실험에서는 Demo AI image/revision, model/config, ECS CPU/memory, desired count, endpoint와 가능한 한 동일한 latency 특성을 고정한다. 이 조건이 바뀐 실행은 GuardBench capacity 변경 전후의 동일 조건 비교로 간주하지 않는다. Application Target은 workload가 호출할 target을 지정할 뿐 target capacity를 GuardBench 실험 축으로 소유하지 않는다.
 
 ```bash
 runner_repository="$(terraform output -raw performance_runner_ecr_repository_url)"
