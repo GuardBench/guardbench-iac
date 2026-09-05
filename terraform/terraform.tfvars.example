@@ -81,6 +81,14 @@ performance_runner_instance_type  = "t3.medium"
 performance_runner_root_volume_gb = 20
 performance_runner_spot           = true
 performance_runner_enabled       = false
+# Required before enabling the runner. Push this exact Backend commit SHA to
+# the dedicated performance-runner ECR repository first; Terraform verifies
+# that the immutable image exists during plan.
+# performance_runner_image_tag    = "a1ab7bb831f8c09553a143ca656406b101ec4a98"
+# Terraform resolves and outputs the tag digest; expected digest for this image:
+# sha256:efc0fa1c4e07befad8586cad3f7706c2d8d0043ea254f757665df57069bf252e
+# IaC revision recorded by the runner; use the exact 40-character commit SHA.
+# performance_runner_infra_revision = "0123456789abcdef0123456789abcdef01234567"
 
 # Private SSM host for local psql/DBeaver port forwarding to both RDS instances.
 db_access_host_enabled       = true
