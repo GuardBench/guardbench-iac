@@ -6,6 +6,48 @@
 
 # --- Interface Endpoints (PrivateLink) ---
 
+# AWS Control Plane APIs used by the private Performance Runner capacity snapshot.
+# Keep these as dedicated endpoints instead of opening the Runner SG to the NAT
+# gateway; the existing endpoint SG already allows HTTPS from the Runner SG.
+resource "aws_vpc_endpoint" "ecs" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.ecs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "${var.project}-${var.environment}-vpce-ecs"
+  }
+}
+
+resource "aws_vpc_endpoint" "rds" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.rds"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "${var.project}-${var.environment}-vpce-rds"
+  }
+}
+
+resource "aws_vpc_endpoint" "sagemaker_api" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.sagemaker.api"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "${var.project}-${var.environment}-vpce-sagemaker-api"
+  }
+}
+
 # SQS - 메시지 큐 (gb-run-resolve, gb-workitems, gb-run-finalize)
 resource "aws_vpc_endpoint" "sqs" {
   vpc_id              = aws_vpc.main.id

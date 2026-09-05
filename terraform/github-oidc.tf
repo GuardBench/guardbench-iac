@@ -235,7 +235,12 @@ data "aws_iam_policy_document" "backend_performance_github_actions_assume_role" 
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:GuardBench/guardbench-backend:environment:performance"]
+      # GuardBench customizes GitHub OIDC subjects with immutable organization
+      # and repository IDs. The performance Environment is branch-restricted
+      # to dev in GitHub settings, so the environment subject is sufficient.
+      values = [
+        "repo:GuardBench@316853045/guardbench-backend@1333885107:environment:performance",
+      ]
     }
   }
 }
