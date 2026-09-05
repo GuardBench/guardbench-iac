@@ -285,17 +285,17 @@ variable "dev_db_backup_retention_period" {
 }
 
 variable "performance_db_instance_class" {
-  description = "Required instance class for the performance-test RDS, set from the approved test sizing decision"
+  description = "Instance class for the isolated, fixed Performance RDS dependency used by MVP tests; record the applied value for reproducibility and observe it for bottlenecks. RDS capacity sweep/tuning is outside MVP scope."
   type        = string
 }
 
 variable "performance_db_allocated_storage" {
-  description = "Required allocated storage in GiB for the performance-test RDS"
+  description = "Configured allocated storage in GiB for the isolated, fixed Performance RDS MVP dependency; record the applied value for reproducibility. RDS capacity sweep/tuning is outside MVP scope."
   type        = number
 }
 
 variable "performance_db_max_allocated_storage" {
-  description = "Required maximum autoscaled storage in GiB for the performance-test RDS"
+  description = "Configured maximum allocated storage in GiB for the isolated, fixed Performance RDS MVP dependency; record the applied value for reproducibility. RDS capacity sweep/tuning is outside MVP scope."
   type        = number
 
   validation {
@@ -305,7 +305,7 @@ variable "performance_db_max_allocated_storage" {
 }
 
 variable "performance_db_backup_retention_period" {
-  description = "Required backup retention period in days for the performance-test RDS"
+  description = "Configured backup retention period in days for the isolated, fixed Performance RDS MVP dependency; record the applied value for reproducibility. RDS capacity sweep/tuning is outside MVP scope."
   type        = number
 }
 

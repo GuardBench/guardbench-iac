@@ -72,6 +72,12 @@ Capacity 변경 전후에는 다음처럼 Performance Task Definition 변경만 
 terraform plan -var='performance_api_cpu=1024' -var='performance_api_memory=2048'
 ```
 
+Performance RDS는 이 ECS capacity 실험 축과 다르다. MVP에서는 workload를 Dev RDS와
+격리하기 위한 전용 DB이며, 성능 테스트 기간 동안 고정되는 의존 인프라로 운용한다.
+실제 instance class, storage, backup retention 등 구성은 재현성을 위해 결과 snapshot에
+기록하고 CloudWatch로 병목 여부를 관찰한다. RDS capacity sweep/tuning은 MVP 범위가
+아니다.
+
 ## 배포 순서
 
 ```bash
@@ -105,7 +111,7 @@ Backend `dev`의 execution/resolution claim lease 기본값은 45초이며, HTTP
 
 `maxReceiveCount = 5`는 반복되는 malformed message, application/DB 장애를 DLQ로 격리하기 위한 SQS redrive 기준이며 Provider retry budget이 아니다. Provider 호출 재시도는 Backend의 application-level attempt 정책이 소유한다. Dev와 performance-test는 별도 source queue/DLQ를 사용하지만 visibility timeout 계약은 동일하게 적용된다.
 
-Dev Backend는 Dev RDS와 Dev queue를 고정으로 사용하고, Performance Backend는 Performance RDS와 Performance queue를 고정으로 사용한다. `ecs_db_target`은 기존 `terraform.tfvars` 호환을 위해 남아 있지만 더 이상 리소스 선택에 사용하지 않는다. Performance RDS의 instance class, storage, backup retention 변수에는 default가 없으므로 적용 전에 승인된 성능 계획 값을 모두 명시해야 한다. Dev/Performance service는 shared ECS task execution/app task role을 사용하며 두 RDS secret과 두 queue 집합에 필요한 권한만 허용한다. credential은 Terraform output이나 task definition plaintext에 노출하지 않는다. 외부 AI provider를 호출하는 ECS task는 private route table의 NAT Gateway와 API security group의 outbound HTTPS rule을 사용한다. AWS Bedrock 등 VPC Endpoint가 지원하는 서비스는 기존 private endpoint를 우선 사용한다.
+Dev Backend는 Dev RDS와 Dev queue를 고정으로 사용하고, Performance Backend는 Performance RDS와 Performance queue를 고정으로 사용한다. `ecs_db_target`은 기존 `terraform.tfvars` 호환을 위해 남아 있지만 더 이상 리소스 선택에 사용하지 않는다. Performance RDS는 MVP의 격리된 고정 의존 인프라다. instance class, storage, backup retention 변수에는 default가 없으므로 적용 전에 고정할 구성 값을 모두 명시해야 하며, 실제 적용값은 재현성을 위해 기록하고 CloudWatch로 병목 여부를 관찰한다. RDS capacity sweep/tuning은 MVP 범위가 아니다. Dev/Performance service는 shared ECS task execution/app task role을 사용하며 두 RDS secret과 두 queue 집합에 필요한 권한만 허용한다. credential은 Terraform output이나 task definition plaintext에 노출하지 않는다. 외부 AI provider를 호출하는 ECS task는 private route table의 NAT Gateway와 API security group의 outbound HTTPS rule을 사용한다. AWS Bedrock 등 VPC Endpoint가 지원하는 서비스는 기존 private endpoint를 우선 사용한다.
 
 전용 Performance Runner EC2는 `performance_runner_enabled = false`가 기본값이며 일반적인 `dev` 배포에서는 생성하지 않는다. Backend의 `performance/build-runner-image.sh`로 이미지를 빌드하고 Terraform output의 전용 ECR repository에 Backend commit SHA tag로 push한 뒤, 성능 테스트를 실행할 때만 이 값을 `true`로 설정하고 Terraform apply를 수행한다. Spot runner는 `one-time` 요청이므로 테스트 종료 후 인스턴스를 삭제하거나 중단하면 다음 테스트 전에 다시 apply해야 한다.
 

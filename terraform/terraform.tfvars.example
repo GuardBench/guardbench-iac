@@ -66,7 +66,9 @@ performance_app_desired_count = 1
 performance_api_cpu    = 512
 performance_api_memory = 1024
 
-# Performance RDS (isolated destructive-reset target for performance tests)
+# Performance RDS is an isolated, fixed dependency for MVP performance tests.
+# Keep its configured values stable; record them for reproducibility and observe
+# CloudWatch metrics for bottleneck detection. Capacity sweep/tuning is out of scope.
 performance_db_instance_class          = "db.m7g.large"
 performance_db_allocated_storage       = 20
 performance_db_max_allocated_storage   = 100
