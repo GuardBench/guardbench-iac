@@ -2,6 +2,28 @@
 # The host pulls a versioned Docker image from the private ECR repository.
 locals {
   performance_runner_image_uri = var.performance_runner_image_tag == null ? null : "${aws_ecr_repository.performance_runner.repository_url}:${var.performance_runner_image_tag}"
+  performance_runner_source_queue_urls = join(",", [
+    aws_sqs_queue.performance_source["gb-run-resolve"].url,
+    aws_sqs_queue.performance_source["gb-workitems"].url,
+    aws_sqs_queue.performance_source["gb-run-finalize"].url,
+  ])
+  performance_runner_dlq_urls = join(",", [
+    aws_sqs_queue.performance_dead_letter["gb-run-resolve"].url,
+    aws_sqs_queue.performance_dead_letter["gb-workitems"].url,
+    aws_sqs_queue.performance_dead_letter["gb-run-finalize"].url,
+  ])
+
+  performance_runner_source_queue_names = {
+    resolve    = aws_sqs_queue.performance_source["gb-run-resolve"].name
+    work_items = aws_sqs_queue.performance_source["gb-workitems"].name
+    finalize   = aws_sqs_queue.performance_source["gb-run-finalize"].name
+  }
+  performance_runner_dlq_names = {
+    resolve    = aws_sqs_queue.performance_dead_letter["gb-run-resolve"].name
+    work_items = aws_sqs_queue.performance_dead_letter["gb-workitems"].name
+    finalize   = aws_sqs_queue.performance_dead_letter["gb-run-finalize"].name
+  }
+
 }
 
 data "aws_ssm_parameter" "performance_runner_ami" {
@@ -188,10 +210,39 @@ resource "aws_ssm_document" "performance_runner_bootstrap" {
           "crlf_files=\"$(docker run --rm --entrypoint python3.11 \"$runner_image\" -c 'from pathlib import Path; print(\"\\n\".join(str(path) for path in Path(\"/workspace/bin\").rglob(\"*\") if path.is_file() and b\"\\r\\n\" in path.read_bytes()))')\"",
           "if [ -n \"$crlf_files\" ]; then echo \"Runner image contains CRLF scripts: $crlf_files\" >&2; echo 'Rebuild and republish the image from an LF-preserving checkout.' >&2; exit 1; fi",
           "docker run --rm --entrypoint /workspace/bin/verify-runtime \"$runner_image\"",
+
           "install -d -m 0755 /opt/guardbench-performance-runner",
-          "printf '%s\\n' \"$runner_image\" > /opt/guardbench-performance-runner/image",
-          "printf '%s\\n' \"$image_digest\" > /opt/guardbench-performance-runner/digest",
-          "printf '%s\\n' \"$expected_runner_image\" > /opt/guardbench-performance-runner/expected-image",
+
+          "environment_file=/opt/guardbench-performance-runner/environment",
+          ": > \"$environment_file\"",
+          "printf \"%s\\n\" \"AWS_REGION=${var.aws_region}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"INFRA_REVISION=${var.performance_runner_infra_revision}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_BASE_URL=http://${aws_lb.performance_api.dns_name}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_TARGET_URL=http://${aws_lb.performance_api.dns_name}/v1/chat/completions\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_TARGET_MODEL=demo-model\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_TARGET_REVISION=${var.demo_ai_image_tag}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_ECS_CLUSTER=${aws_ecs_cluster.main.name}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_ECS_SERVICE=${aws_ecs_service.performance_app.name}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_RDS_INSTANCE_ID=${aws_db_instance.performance.identifier}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_SAGEMAKER_ENDPOINT_NAME=${local.sagemaker_classifier_endpoint_name}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_SAGEMAKER_VARIANT_NAME=AllTraffic\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_SOURCE_QUEUE_URLS=${local.performance_runner_source_queue_urls}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_DLQ_URLS=${local.performance_runner_dlq_urls}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_SOURCE_QUEUE_RESOLVE_NAME=${local.performance_runner_source_queue_names.resolve}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_SOURCE_QUEUE_WORK_ITEMS_NAME=${local.performance_runner_source_queue_names.work_items}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_SOURCE_QUEUE_FINALIZE_NAME=${local.performance_runner_source_queue_names.finalize}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_DLQ_RESOLVE_NAME=${local.performance_runner_dlq_names.resolve}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_DLQ_WORK_ITEMS_NAME=${local.performance_runner_dlq_names.work_items}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_DLQ_FINALIZE_NAME=${local.performance_runner_dlq_names.finalize}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERFORMANCE_RESULTS_BUCKET=${aws_s3_bucket.performance_results.id}\" >> \"$environment_file\"",
+          "chmod 0644 \"$environment_file\"",
+
+          "printf \"%s\\n\" \"$runner_image\" > /opt/guardbench-performance-runner/image",
+          "printf \"%s\\n\" \"$image_digest\" > /opt/guardbench-performance-runner/digest",
+          "printf \"%s\\n\" \"$expected_runner_image\" > /opt/guardbench-performance-runner/expected-image",
+          "grep \"^INFRA_REVISION=\" \"$environment_file\" | cut -d= -f2- > /opt/guardbench-performance-runner/infra-revision",
+          "printf \"%s\\n\" \"$environment_file\" > /opt/guardbench-performance-runner/environment-file",
+
 
         ]
       }

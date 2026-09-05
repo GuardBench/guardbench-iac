@@ -85,6 +85,8 @@ performance_runner_enabled       = false
 # the dedicated performance-runner ECR repository first; Terraform verifies
 # that the immutable image exists during plan.
 # performance_runner_image_tag    = "0123456789abcdef0123456789abcdef01234567"
+# IaC revision recorded by the runner; use the exact 40-character commit SHA.
+# performance_runner_infra_revision = "0123456789abcdef0123456789abcdef01234567"
 
 # Private SSM host for local psql/DBeaver port forwarding to both RDS instances.
 db_access_host_enabled       = true
