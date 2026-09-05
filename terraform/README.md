@@ -362,7 +362,7 @@ Performance 전용 deploy role은 지정된 ECR repository push,
 `guardbench-dev-performance-app` task definition family 등록, Performance service 조회·갱신,
 ECS execution/app task role에 대한 제한된 `iam:PassRole`만 허용한다. Performance role의
 OIDC trust subject는 정확히
-`repo:GuardBench/guardbench-backend:environment:performance`이며, GitHub Environment의
+`repo:GuardBench@316853045/guardbench-backend@1333885107:environment:performance`이며, GitHub Environment의
 Allowed branch는 `dev`로 제한해야 한다. Task definition tags를 workflow에서 전달하지 않으므로
 `ecs:TagResource`는 부여하지 않는다.
 
