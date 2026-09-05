@@ -54,6 +54,18 @@ resource "aws_iam_role_policy" "performance_runner" {
         Resource = "*"
       },
       {
+        Sid    = "ReadPerformanceCapacity"
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeServices",
+          "ecs:DescribeTaskDefinition",
+          "rds:DescribeDBInstances",
+          "sagemaker:DescribeEndpoint",
+          "sagemaker:DescribeEndpointConfig",
+        ]
+        Resource = "*"
+      },
+      {
         Sid    = "ReadPerformanceQueueMetrics"
         Effect = "Allow"
         Action = ["sqs:GetQueueAttributes"]
