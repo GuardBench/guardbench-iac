@@ -234,7 +234,7 @@ resource "aws_ssm_document" "performance_runner_bootstrap" {
           "printf \"%s\\n\" \"PERF_TARGET_MODEL=demo-model\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERF_TARGET_REVISION=${var.demo_ai_image_tag}\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERF_ECS_CLUSTER=${aws_ecs_cluster.main.name}\" >> \"$environment_file\"",
-          "printf \"%s\\n\" \"PERF_ECS_SERVICE=${aws_ecs_service.performance_app.name}\" >> \"$environment_file\"",
+          "printf \"%s\\n\" \"PERF_ECS_SERVICE=${var.project}-${var.environment}-performance-app\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERF_RDS_INSTANCE_ID=${aws_db_instance.performance.identifier}\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERF_SAGEMAKER_ENDPOINT_NAME=${local.sagemaker_classifier_endpoint_name}\" >> \"$environment_file\"",
           "printf \"%s\\n\" \"PERF_SAGEMAKER_VARIANT_NAME=AllTraffic\" >> \"$environment_file\"",
