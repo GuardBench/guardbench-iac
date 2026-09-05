@@ -316,7 +316,7 @@ variable "performance_runner_instance_type" {
 }
 
 variable "performance_runner_image_tag" {
-  description = "Immutable Backend commit SHA tag for the Performance Runner image; required when the runner is enabled"
+  description = "Immutable commit SHA tag for the dedicated Performance Runner image; independent from the Backend application revision"
   type        = string
   default     = null
   nullable    = true
@@ -326,7 +326,7 @@ variable "performance_runner_image_tag" {
       var.performance_runner_image_tag != null
       && can(regex("^[0-9a-f]{40}$", var.performance_runner_image_tag))
     )
-    error_message = "performance_runner_image_tag must be the 40-character lowercase Backend commit SHA when the runner is enabled."
+    error_message = "performance_runner_image_tag must be the 40-character lowercase Runner image commit SHA when the runner is enabled."
   }
 }
 

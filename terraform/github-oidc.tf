@@ -153,6 +153,7 @@ data "aws_iam_policy_document" "backend_github_actions_deploy" {
       "ecr:BatchCheckLayerAvailability",
       "ecr:CompleteLayerUpload",
       "ecr:DescribeImages",
+      "ecr:DescribeRepositories",
       "ecr:InitiateLayerUpload",
       "ecr:PutImage",
       "ecr:UploadLayerPart",
@@ -340,4 +341,58 @@ resource "aws_iam_role_policy" "backend_performance_github_actions_deploy" {
   name   = "${var.project}-${var.environment}-performance-backend-deploy"
   role   = aws_iam_role.backend_performance_github_actions_deploy.id
   policy = data.aws_iam_policy_document.backend_performance_github_actions_deploy.json
+}
+
+# The Runner image publish workflow has a separate trust boundary from the
+# Performance Backend deploy workflow. It may publish only the dedicated
+# performance-runner repository and cannot register or update ECS resources.
+resource "aws_iam_role" "performance_runner_publish" {
+  name               = "${var.project}-${var.environment}-performance-runner-publish"
+  description        = "Publish immutable GuardBench performance runner images from GitHub Actions"
+  assume_role_policy = data.aws_iam_policy_document.backend_performance_github_actions_assume_role.json
+
+  max_session_duration = 3600
+
+  tags = {
+    Name    = "${var.project}-${var.environment}-performance-runner-publish"
+    Purpose = "performance-testing"
+  }
+}
+
+data "aws_iam_policy_document" "performance_runner_publish" {
+  statement {
+    sid       = "CallerIdentity"
+    effect    = "Allow"
+    actions   = ["sts:GetCallerIdentity"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "EcrAuthorization"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PublishPerformanceRunnerImage"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:CompleteLayerUpload",
+      "ecr:DescribeImages",
+      "ecr:DescribeRepositories",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+    ]
+    resources = [aws_ecr_repository.performance_runner.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "performance_runner_publish" {
+  name   = "${var.project}-${var.environment}-performance-runner-publish"
+  role   = aws_iam_role.performance_runner_publish.id
+  policy = data.aws_iam_policy_document.performance_runner_publish.json
 }

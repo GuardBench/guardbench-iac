@@ -69,6 +69,11 @@ output "backend_performance_github_actions_role_arn" {
   value       = aws_iam_role.backend_performance_github_actions_deploy.arn
 }
 
+output "performance_runner_publish_github_actions_role_arn" {
+  description = "Role ARN used by the Performance Runner image publish workflow via OIDC"
+  value       = aws_iam_role.performance_runner_publish.arn
+}
+
 # ============================================
 # ALB Outputs
 # ============================================
@@ -193,6 +198,11 @@ output "performance_runner_bootstrap_document_name" {
 output "performance_runner_ecr_repository_url" {
   description = "Private ECR repository URL for immutable performance runner images"
   value       = aws_ecr_repository.performance_runner.repository_url
+}
+
+output "performance_runner_ecr_repository_name" {
+  description = "ECR repository name for the Performance Runner publish workflow"
+  value       = aws_ecr_repository.performance_runner.name
 }
 
 output "performance_runner_image_uri" {

@@ -81,12 +81,15 @@ performance_runner_instance_type  = "t3.medium"
 performance_runner_root_volume_gb = 20
 performance_runner_spot           = true
 performance_runner_enabled       = false
-# Required before enabling the runner. Push this exact Backend commit SHA to
-# the dedicated performance-runner ECR repository first; Terraform verifies
-# that the immutable image exists during plan.
-# performance_runner_image_tag    = "a1ab7bb831f8c09553a143ca656406b101ec4a98"
+# Required before enabling the runner. Push the immutable Runner image to the
+# dedicated performance-runner ECR repository first; Terraform verifies that
+# the image exists during plan. The Runner image may be built independently
+# from the Backend application image.
+# Backend #212-compatible Runner image published from dev.
+# performance_runner_image_tag    = "035dce0f884f66c534f3ee030ad2122324742eee"
 # Terraform resolves and outputs the tag digest; expected digest for this image:
-# sha256:efc0fa1c4e07befad8586cad3f7706c2d8d0043ea254f757665df57069bf252e
+# sha256:b5fc9cd30448540f1ffdb37ea454d083c814f35028aeeb25ce6b3447d8aaa867
+# The bootstrap resolves APP_REVISION from the active Performance ECS service.
 # IaC revision recorded by the runner; use the exact 40-character commit SHA.
 # performance_runner_infra_revision = "0123456789abcdef0123456789abcdef01234567"
 
