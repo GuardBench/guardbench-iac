@@ -60,6 +60,12 @@ sagemaker_classifier_endpoint_enabled = false
 performance_app_enabled       = false
 performance_app_desired_count = 1
 
+# Performance Infrastructure Capacity is independent from the Dev API task.
+# These values are recorded in the active ECS Task Definition and in the
+# performance result capacity snapshot; they are not Profile/Workload inputs.
+performance_api_cpu    = 512
+performance_api_memory = 1024
+
 # Performance RDS (isolated destructive-reset target for performance tests)
 performance_db_instance_class          = "db.m7g.large"
 performance_db_allocated_storage       = 20

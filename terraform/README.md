@@ -53,6 +53,25 @@ terraform apply
 
 현재 결합 서비스의 `app` 값 변경은 `aws_ecs_service.app`의 `desired_count`만 갱신하며 task definition이나 다른 서비스의 capacity를 변경하지 않는다. `terraform plan`에서 이 변경이 의도한 ECS Service update인지 확인한 뒤 apply한다.
 
+Performance Backend의 Infrastructure Capacity는 Dev API와 독립된
+`performance_api_cpu`/`performance_api_memory` 입력으로 관리한다. 기본값은 기존
+Performance Task Definition과 같은 512 CPU units / 1024 MiB이며, 실제 최적값을 의미하지
+않는다. 이 값을 변경하면 `aws_ecs_task_definition.performance_app`만 새 CPU/memory로
+등록되고 Dev Task Definition/Service에는 변경이 없어야 한다. Backend #193 snapshot은
+Profile/Workload 값이 아니라 AWS에 적용된 active Performance Task Definition의
+`ecs.task_cpu`와 `ecs.task_memory`를 기록한다.
+
+```hcl
+performance_api_cpu    = 1024
+performance_api_memory = 2048
+```
+
+Capacity 변경 전후에는 다음처럼 Performance Task Definition 변경만 포함되는지 확인한다.
+
+```bash
+terraform plan -var='performance_api_cpu=1024' -var='performance_api_memory=2048'
+```
+
 ## 배포 순서
 
 ```bash

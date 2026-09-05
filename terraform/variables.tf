@@ -79,6 +79,28 @@ variable "api_memory" {
   default     = 1024
 }
 
+variable "performance_api_cpu" {
+  description = "CPU units for the independent Performance Backend task (1 vCPU = 1024)"
+  type        = number
+  default     = 512
+
+  validation {
+    condition     = var.performance_api_cpu > 0 && var.performance_api_cpu == floor(var.performance_api_cpu)
+    error_message = "performance_api_cpu must be a positive whole number."
+  }
+}
+
+variable "performance_api_memory" {
+  description = "Memory (MiB) for the independent Performance Backend task"
+  type        = number
+  default     = 1024
+
+  validation {
+    condition     = var.performance_api_memory > 0 && var.performance_api_memory == floor(var.performance_api_memory)
+    error_message = "performance_api_memory must be a positive whole number."
+  }
+}
+
 variable "backend_service_desired_counts" {
   description = "Desired task counts keyed by backend ECS service role; app is the current combined service and api/worker are available for the future split"
   type        = map(number)
