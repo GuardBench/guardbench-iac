@@ -153,6 +153,7 @@ data "aws_iam_policy_document" "backend_github_actions_deploy" {
       "ecr:BatchCheckLayerAvailability",
       "ecr:CompleteLayerUpload",
       "ecr:DescribeImages",
+      "ecr:DescribeRepositories",
       "ecr:InitiateLayerUpload",
       "ecr:PutImage",
       "ecr:UploadLayerPart",
