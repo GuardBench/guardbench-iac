@@ -1,5 +1,8 @@
 # Dedicated, disposable execution host for the backend performance runner.
 # The host pulls a versioned Docker image from the private ECR repository.
+locals {
+  performance_runner_image_uri = var.performance_runner_image_tag == null ? null : "${aws_ecr_repository.performance_runner.repository_url}:${var.performance_runner_image_tag}"
+}
 
 data "aws_ssm_parameter" "performance_runner_ami" {
   # ECS Optimized AL2023 includes Docker and avoids package downloads from a
@@ -7,6 +10,12 @@ data "aws_ssm_parameter" "performance_runner_ami" {
   name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
 }
 
+data "aws_ecr_image" "performance_runner" {
+  count = var.performance_runner_enabled && var.performance_runner_image_tag != null ? 1 : 0
+
+  repository_name = aws_ecr_repository.performance_runner.name
+  image_tag       = var.performance_runner_image_tag
+}
 resource "aws_iam_role" "performance_runner" {
   name = "${var.project}-${var.environment}-performance-runner-role"
 
@@ -166,15 +175,24 @@ resource "aws_ssm_document" "performance_runner_bootstrap" {
           "curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \"$performance_base_url/health\" >/dev/null",
           "curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \"$performance_base_url/api/v1/test-suites?page=1&size=1\" >/dev/null",
           "runner_image='{{ RunnerImage }}'",
+          "expected_runner_image=\"${local.performance_runner_image_uri == null ? "" : local.performance_runner_image_uri}\"",
+          "if [ -z \"$expected_runner_image\" ]; then echo \"performance_runner_image_tag must be configured before bootstrap.\" >&2; exit 1; fi",
+          "if [ \"$runner_image\" != \"$expected_runner_image\" ]; then echo \"RunnerImage must match the Terraform-verified image: $expected_runner_image\" >&2; exit 1; fi",
           "case \"$runner_image\" in \"${aws_ecr_repository.performance_runner.repository_url}:\"*) ;; *) echo 'RunnerImage must use the dedicated performance-runner ECR repository.' >&2; exit 1 ;; esac",
           "registry=\"$${runner_image%%/*}\"",
           "aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin \"$registry\"",
           "docker pull \"$runner_image\"",
+          "image_digest=\"$(docker image inspect --format '{{index .RepoDigests 0}}' \"$runner_image\")\"",
+          "case \"$image_digest\" in *@sha256:*) ;; *) echo 'Runner image digest could not be resolved after pull.' >&2; exit 1 ;; esac",
+
           "crlf_files=\"$(docker run --rm --entrypoint python3.11 \"$runner_image\" -c 'from pathlib import Path; print(\"\\n\".join(str(path) for path in Path(\"/workspace/bin\").rglob(\"*\") if path.is_file() and b\"\\r\\n\" in path.read_bytes()))')\"",
           "if [ -n \"$crlf_files\" ]; then echo \"Runner image contains CRLF scripts: $crlf_files\" >&2; echo 'Rebuild and republish the image from an LF-preserving checkout.' >&2; exit 1; fi",
           "docker run --rm --entrypoint /workspace/bin/verify-runtime \"$runner_image\"",
           "install -d -m 0755 /opt/guardbench-performance-runner",
           "printf '%s\\n' \"$runner_image\" > /opt/guardbench-performance-runner/image",
+          "printf '%s\\n' \"$image_digest\" > /opt/guardbench-performance-runner/digest",
+          "printf '%s\\n' \"$expected_runner_image\" > /opt/guardbench-performance-runner/expected-image",
+
         ]
       }
     }]

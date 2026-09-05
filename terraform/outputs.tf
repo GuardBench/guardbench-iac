@@ -195,6 +195,16 @@ output "performance_runner_ecr_repository_url" {
   value       = aws_ecr_repository.performance_runner.repository_url
 }
 
+output "performance_runner_image_uri" {
+  description = "Terraform-verified immutable Performance Runner image URI"
+  value       = local.performance_runner_image_uri
+}
+
+output "performance_runner_image_digest" {
+  description = "Digest of the Terraform-verified Performance Runner image"
+  value       = var.performance_runner_enabled ? data.aws_ecr_image.performance_runner[0].image_digest : null
+}
+
 output "demo_ai_ecr_repository_url" {
   description = "Private ECR repository URL for immutable Demo AI images"
   value       = aws_ecr_repository.demo_ai.repository_url
